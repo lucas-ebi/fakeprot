@@ -7,7 +7,7 @@ name = "fakeprot"
 version = "0.2.0"
 description = "Generate artificial protein families by simulating protein evolution."
 license = { text = "GPL-3.0-or-later" }
-authors = [{ name = "Lucas Carrijo de Oliveira", email = "lucas.carrijodeoliveira@gmail.com" }]
+authors = [{ name = "Lucas Carrijo de Oliveira", email = "lucas@ebi.ac.uk" }]
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
