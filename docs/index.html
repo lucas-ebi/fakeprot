@@ -7,162 +7,189 @@
   <script src="https://cdn.jsdelivr.net/pyodide/v0.27.0/full/pyodide.js"></script>
   <style>
     :root {
-      --accent:       #2563eb;
-      --accent-dark:  #1d4ed8;
-      --accent-light: #eff6ff;
-      --surface:      #f1f5f9;
-      --card:         #ffffff;
-      --border:       #e2e8f0;
-      --text:         #0f172a;
-      --muted:        #64748b;
-      --green:        #16a34a;
-      --amber:        #d97706;
-      --red:          #dc2626;
+      --green:       #18974c;
+      --green-dark:  #0a5032;
+      --blue:        #3b6fb6;
+      --blue-dark:   #193f90;
+      --blue-light:  #d1e3f6;
+      --text:        #1a1c1a;
+      --muted:       #595c56;
+      --border:      #d0d0ce;
+      --surface:     #f5f5f5;
+      --white:       #ffffff;
+      --error:       #d32f2f;
+      --amber:       #e65400;
     }
 
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
-      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      font-family: "Helvetica Neue", Arial, Helvetica, sans-serif;
+      font-size: 0.9375rem;
       background: var(--surface);
       color: var(--text);
       min-height: 100vh;
+      line-height: 1.55;
     }
 
-    /* ── Header ─────────────────────────────────────────────────────── */
+    /* ── Header ──────────────────────────────────────────────────────── */
     header {
-      background: #0f172a;
-      color: #f8fafc;
-      padding: 2.25rem 1.5rem 2rem;
-      text-align: center;
+      background: var(--green-dark);
+      border-bottom: 4px solid var(--green);
+      color: #fff;
+      padding: 1.25rem 1.5rem;
     }
-    header h1 { font-size: 2rem; font-weight: 700; letter-spacing: -0.02em; }
-    header p   { margin-top: 0.5rem; color: #94a3b8; font-size: 0.9375rem; }
-    header nav { margin-top: 1rem; }
-    header nav a {
-      color: #93c5fd;
+    .header-inner {
+      max-width: 920px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+    }
+    header h1 {
+      font-size: 1.375rem;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      color: #fff;
+    }
+    header .subtitle {
+      color: #a7d7b8;
       font-size: 0.8125rem;
+      margin-top: 0.2rem;
+    }
+    header nav a {
+      font-size: 0.8125rem;
+      color: #a7d7b8;
       text-decoration: none;
-      border: 1px solid #1e3a5f;
-      padding: 0.3rem 0.75rem;
-      border-radius: 99px;
-      transition: background 0.15s;
     }
-    header nav a:hover { background: #1e3a5f; }
+    header nav a:hover { color: #fff; text-decoration: underline; }
 
-    /* ── Layout ──────────────────────────────────────────────────────── */
+    /* ── Main layout ─────────────────────────────────────────────────── */
     main {
-      max-width: 780px;
-      margin: 2rem auto;
-      padding: 0 1.25rem 4rem;
+      max-width: 920px;
+      margin: 1.75rem auto;
+      padding: 0 1.5rem 5rem;
     }
+
+    section + section { margin-top: 1.5rem; }
+
+    /* ── Section labels ──────────────────────────────────────────────── */
+    .section-label {
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      margin-bottom: 0.5rem;
+    }
+
+    /* ── Panels ──────────────────────────────────────────────────────── */
+    .panel {
+      background: var(--white);
+      border: 1px solid var(--border);
+      padding: 1.25rem 1.5rem;
+    }
+
+    /* ── About ───────────────────────────────────────────────────────── */
+    .about-text {
+      font-size: 0.875rem;
+      color: var(--muted);
+      line-height: 1.65;
+      max-width: 76ch;
+    }
+    .about-text + .about-text { margin-top: 0.5rem; }
+    .about-text a { color: var(--blue); }
+    .about-text a:hover { color: var(--blue-dark); }
 
     /* ── Status bar ──────────────────────────────────────────────────── */
     #status-bar {
       display: flex;
       align-items: center;
-      gap: 0.625rem;
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 0.75rem 1.125rem;
-      margin-bottom: 1.25rem;
+      gap: 0.5rem;
       font-size: 0.8125rem;
       color: var(--muted);
+      padding: 0.5rem 0;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 1.5rem;
     }
     .dot {
-      width: 8px; height: 8px;
+      width: 7px; height: 7px;
       border-radius: 50%;
       flex-shrink: 0;
       background: var(--amber);
     }
-    .dot.loading { background: var(--accent); animation: blink 1.1s ease-in-out infinite; }
+    .dot.loading { background: var(--blue); animation: pulse 1.4s ease-in-out infinite; }
     .dot.ready   { background: var(--green); }
-    .dot.error   { background: var(--red); }
-    @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0.25; } }
-
-    /* ── Card ────────────────────────────────────────────────────────── */
-    .card {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 1.5rem;
-      margin-bottom: 1.25rem;
-    }
-    .card-title {
-      font-size: 0.8125rem;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      color: var(--muted);
-      margin-bottom: 1.125rem;
-    }
+    .dot.error   { background: var(--error); }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.25; } }
 
     /* ── Form ────────────────────────────────────────────────────────── */
-    .grid {
+    .form-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 0.875rem 1.125rem;
+      gap: 0.75rem 2rem;
     }
-    .field { display: flex; flex-direction: column; gap: 0.3rem; }
+    .form-group-label {
+      grid-column: 1 / -1;
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: var(--muted);
+      padding-top: 0.375rem;
+      border-top: 1px solid var(--border);
+      margin-top: 0.25rem;
+    }
+    .form-group-label:first-child { border-top: none; margin-top: 0; padding-top: 0; }
+    .field { display: flex; flex-direction: column; gap: 0.2rem; }
     .field label {
       font-size: 0.8125rem;
-      font-weight: 500;
+      font-weight: 600;
       color: var(--text);
     }
-    .field label .hint {
+    .field .hint {
       font-weight: 400;
+      font-size: 0.75rem;
       color: var(--muted);
-      margin-left: 0.2rem;
     }
     .field input, .field select {
-      padding: 0.5rem 0.6875rem;
+      padding: 0.375rem 0.5rem;
       border: 1px solid var(--border);
-      border-radius: 6px;
       font-size: 0.875rem;
+      font-family: inherit;
       color: var(--text);
-      background: white;
+      background: var(--white);
       width: 100%;
-      transition: border-color 0.12s, box-shadow 0.12s;
     }
     .field input:focus, .field select:focus {
-      outline: none;
-      border-color: var(--accent);
-      box-shadow: 0 0 0 3px rgba(37,99,235,.1);
+      outline: 2px solid var(--blue);
+      outline-offset: -1px;
+      border-color: var(--blue);
     }
 
-    /* ── Divider ─────────────────────────────────────────────────────── */
-    .divider {
-      grid-column: 1 / -1;
-      border: none;
-      border-top: 1px solid var(--border);
-      margin: 0.25rem 0;
-    }
-
-    /* ── Run button ──────────────────────────────────────────────────── */
+    /* ── Submit ──────────────────────────────────────────────────────── */
     #run-btn {
-      display: flex;
+      display: inline-flex;
       align-items: center;
-      justify-content: center;
       gap: 0.5rem;
-      width: 100%;
-      padding: 0.75rem;
-      margin-top: 1.125rem;
-      background: var(--accent);
+      padding: 0.5rem 1.375rem;
+      margin-top: 1.25rem;
+      background: var(--blue);
       color: white;
-      border: none;
-      border-radius: 7px;
-      font-size: 0.9375rem;
-      font-weight: 600;
+      border: 1px solid var(--blue-dark);
+      font-size: 0.875rem;
+      font-weight: 700;
+      font-family: inherit;
       cursor: pointer;
-      transition: background 0.12s;
     }
-    #run-btn:hover:not(:disabled) { background: var(--accent-dark); }
-    #run-btn:disabled { background: #94a3b8; cursor: not-allowed; }
-    #run-btn .spinner {
+    #run-btn:hover:not(:disabled) { background: var(--blue-dark); }
+    #run-btn:disabled { background: #8eadd4; border-color: #7a9ec8; cursor: not-allowed; }
+    .spinner {
       display: none;
-      width: 16px; height: 16px;
-      border: 2px solid rgba(255,255,255,.3);
+      width: 13px; height: 13px;
+      border: 2px solid rgba(255,255,255,.35);
       border-top-color: white;
       border-radius: 50%;
       animation: spin .7s linear infinite;
@@ -172,217 +199,237 @@
 
     /* ── Warning ─────────────────────────────────────────────────────── */
     .warning {
-      background: #fffbeb;
-      border: 1px solid #fde68a;
-      border-radius: 6px;
-      padding: 0.625rem 0.875rem;
+      background: #fffadc;
+      border-left: 3px solid #e6b800;
+      padding: 0.5rem 0.75rem;
       font-size: 0.8125rem;
-      color: #92400e;
-      margin-bottom: 1rem;
+      color: #5a4500;
+      margin-bottom: 0.875rem;
     }
 
-    /* ── Output ──────────────────────────────────────────────────────── */
+    /* ── Results table ───────────────────────────────────────────────── */
     #output-section { display: none; }
-    .download-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 0.625rem;
-    }
-    .dl-card {
-      display: flex;
-      align-items: center;
-      gap: 0.75rem;
-      padding: 0.75rem 0.875rem;
-      border: 1px solid var(--border);
-      border-radius: 7px;
-      text-decoration: none;
-      color: var(--text);
-      font-size: 0.8125rem;
-      background: white;
-      transition: border-color 0.12s, background 0.12s;
-    }
-    .dl-card:hover { border-color: var(--accent); background: var(--accent-light); }
-    .dl-icon { font-size: 1.375rem; flex-shrink: 0; line-height: 1; }
-    .dl-info { flex: 1; min-width: 0; }
-    .dl-name {
-      font-weight: 500;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    .dl-desc { font-size: 0.7rem; color: var(--muted); margin-top: 0.1rem; }
-    .dl-arrow { color: var(--muted); font-size: 0.75rem; flex-shrink: 0; }
 
-    /* ── About section ───────────────────────────────────────────────── */
-    details {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 1rem 1.5rem;
-      margin-bottom: 1.25rem;
-    }
-    summary {
-      cursor: pointer;
+    .output-table {
+      width: 100%;
+      border-collapse: collapse;
       font-size: 0.8125rem;
-      font-weight: 600;
+    }
+    .output-table th {
+      background: var(--surface);
+      font-weight: 700;
+      text-align: left;
+      padding: 0.375rem 0.75rem;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 0.75rem;
       text-transform: uppercase;
       letter-spacing: 0.06em;
-      color: var(--muted);
-      user-select: none;
+      white-space: nowrap;
     }
-    details p {
-      margin-top: 0.875rem;
-      font-size: 0.875rem;
-      color: var(--muted);
-      line-height: 1.65;
+    .output-table td {
+      padding: 0.375rem 0.75rem;
+      border: 1px solid var(--border);
+      vertical-align: middle;
     }
-    details p + p { margin-top: 0.5rem; }
+    .output-table tr:hover td { background: var(--blue-light); }
+    .output-table .file-name {
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      font-size: 0.8125rem;
+    }
+    .output-table .file-type {
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      font-size: 0.75rem;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+    .output-table .file-desc { color: var(--muted); }
+    .dl-link {
+      color: var(--blue);
+      text-decoration: none;
+      font-weight: 600;
+    }
+    .dl-link:hover { color: var(--blue-dark); text-decoration: underline; }
+
+    /* ── Footer ──────────────────────────────────────────────────────── */
+    footer {
+      margin-top: 2.5rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--border);
+      font-size: 0.75rem;
+      color: var(--muted);
+      line-height: 1.7;
+    }
+    footer a { color: var(--blue); text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
 
     /* ── Responsive ──────────────────────────────────────────────────── */
-    @media (max-width: 540px) {
-      .grid, .download-grid { grid-template-columns: 1fr; }
+    @media (max-width: 560px) {
+      .form-grid { grid-template-columns: 1fr; }
     }
   </style>
 </head>
 <body>
 
 <header>
-  <h1>FakeProt</h1>
-  <p>Artificial protein family generator — runs entirely in your browser</p>
-  <nav>
-    <a href="https://github.com/lucas-ebi/fakeprot" target="_blank" rel="noopener">
-      ↗ GitHub
-    </a>
-  </nav>
+  <div class="header-inner">
+    <div>
+      <h1>FakeProt</h1>
+      <div class="subtitle">Artificial protein family generator</div>
+    </div>
+    <nav>
+      <a href="https://github.com/lucas-ebi/fakeprot" target="_blank" rel="noopener">Source code on GitHub ↗</a>
+    </nav>
+  </div>
 </header>
 
 <main>
 
-  <!-- Status bar -->
   <div id="status-bar">
     <div class="dot loading" id="status-dot"></div>
-    <span id="status-text">Loading Pyodide…</span>
+    <span id="status-text">Initialising Pyodide…</span>
   </div>
 
-  <!-- About -->
-  <details>
-    <summary>About</summary>
-    <p>
+  <!-- Description -->
+  <section>
+    <p class="about-text">
       FakeProt generates synthetic protein families by simulating protein evolution along a
       random phylogenetic tree. Each branch evolves under the
-      <a href="https://doi.org/10.1093/oxfordjournals.molbev.a003851" target="_blank" rel="noopener" style="color:var(--accent)">WAG substitution model</a>
+      <a href="https://doi.org/10.1093/oxfordjournals.molbev.a003851" target="_blank" rel="noopener">WAG substitution model</a>
       with gamma-distributed site rates and probabilistic physicochemical constraints on amino acid identity.
     </p>
-    <p>
-      The output includes all sequences (including ancestral nodes), a gene tree, a species
-      cladogram, ortholog group assignments, and a per-column stereochemistry report —
-      everything you need to benchmark aligners, tree reconstruction methods, and ortholog
-      detection tools against ground truth.
+    <p class="about-text">
+      Output includes all sequences (including ancestral nodes), a gene tree, a species
+      cladogram, ortholog group assignments, and a per-column physicochemical group report —
+      intended for benchmarking multiple sequence aligners, phylogenetic reconstruction methods,
+      and ortholog detection tools against ground truth.
     </p>
-    <p>
-      The simulation runs entirely in your browser via
-      <a href="https://pyodide.org" target="_blank" rel="noopener" style="color:var(--accent)">Pyodide</a>.
-      No data is sent to any server. First load takes ~30 s while Python packages are downloaded and compiled;
-      subsequent loads are fast thanks to browser caching.
+    <p class="about-text">
+      The simulation runs in-browser via
+      <a href="https://pyodide.org" target="_blank" rel="noopener">Pyodide</a>.
+      No data are transmitted to any server. First load may take a few seconds for package
+      download and compilation; subsequent loads are served from the browser cache.
     </p>
-  </details>
+  </section>
 
   <!-- Parameters form -->
-  <div class="card">
-    <div class="card-title">Parameters</div>
-    <form id="sim-form" autocomplete="off">
-      <div class="grid">
+  <section>
+    <div class="section-label">Parameters</div>
+    <div class="panel">
+      <form id="sim-form" autocomplete="off">
+        <div class="form-grid">
 
-        <!-- Required -->
-        <div class="field">
-          <label for="size">Sequences <span class="hint">min. leaf count</span></label>
-          <input type="number" id="size" value="20" min="2" max="500" required>
-        </div>
-        <div class="field">
-          <label for="length">Length <span class="hint">root sequence (aa)</span></label>
-          <input type="number" id="length" value="100" min="10" max="2000" required>
-        </div>
+          <span class="form-group-label">Sequence space</span>
+          <div class="field">
+            <label for="size">Sequences <span class="hint">minimum leaf count</span></label>
+            <input type="number" id="size" value="20" min="2" max="500" required>
+          </div>
+          <div class="field">
+            <label for="length">Length <span class="hint">root sequence (aa)</span></label>
+            <input type="number" id="length" value="100" min="10" max="2000" required>
+          </div>
 
-        <hr class="divider">
+          <span class="form-group-label">Evolutionary model</span>
+          <div class="field">
+            <label for="gamma_shape">Gamma shape <span class="hint">site-rate variation</span></label>
+            <input type="number" id="gamma_shape" value="2.0" min="0.1" step="0.1">
+          </div>
+          <div class="field">
+            <label for="gamma_scale">Gamma scale <span class="hint">site-rate variation</span></label>
+            <input type="number" id="gamma_scale" value="1.0" min="0.1" step="0.1">
+          </div>
+          <div class="field">
+            <label for="p_gap">Indel probability <span class="hint">default: 1/size</span></label>
+            <input type="number" id="p_gap" placeholder="1 / size" min="0" max="1" step="0.001">
+          </div>
+          <div class="field">
+            <label for="n_orthologs">Ortholog groups</label>
+            <input type="number" id="n_orthologs" value="1" min="1" max="26">
+          </div>
 
-        <!-- Evolution model -->
-        <div class="field">
-          <label for="gamma_shape">Gamma shape <span class="hint">site-rate variation</span></label>
-          <input type="number" id="gamma_shape" value="2.0" min="0.1" step="0.1">
-        </div>
-        <div class="field">
-          <label for="gamma_scale">Gamma scale <span class="hint">site-rate variation</span></label>
-          <input type="number" id="gamma_scale" value="1.0" min="0.1" step="0.1">
-        </div>
-        <div class="field">
-          <label for="p_gap">Indel probability <span class="hint">default 1/size</span></label>
-          <input type="number" id="p_gap" placeholder="1 / size" min="0" max="1" step="0.001">
-        </div>
-        <div class="field">
-          <label for="n_orthologs">Ortholog groups</label>
-          <input type="number" id="n_orthologs" value="1" min="1" max="26">
-        </div>
+          <span class="form-group-label">Output format</span>
+          <div class="field">
+            <label for="msa_format">Alignment format</label>
+            <select id="msa_format">
+              <option value="fasta" selected>FASTA</option>
+              <option value="clustal">Clustal</option>
+              <option value="nexus">Nexus</option>
+              <option value="phylip">PHYLIP</option>
+              <option value="stockholm">Stockholm</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="tree_format">Tree format</label>
+            <select id="tree_format">
+              <option value="newick" selected>Newick</option>
+              <option value="nexus">Nexus</option>
+              <option value="nexml">NeXML</option>
+              <option value="phyloxml">PhyloXML</option>
+              <option value="cdao">CDAO</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="seed">Random seed <span class="hint">optional; for reproducibility</span></label>
+            <input type="number" id="seed" placeholder="unset">
+          </div>
 
-        <hr class="divider">
+        </div><!-- /form-grid -->
 
-        <!-- Output options -->
-        <div class="field">
-          <label for="msa_format">Alignment format</label>
-          <select id="msa_format">
-            <option value="fasta" selected>FASTA</option>
-            <option value="clustal">Clustal</option>
-            <option value="nexus">Nexus</option>
-            <option value="phylip">PHYLIP</option>
-            <option value="stockholm">Stockholm</option>
-          </select>
-        </div>
-        <div class="field">
-          <label for="tree_format">Tree format</label>
-          <select id="tree_format">
-            <option value="newick" selected>Newick</option>
-            <option value="nexus">Nexus</option>
-            <option value="nexml">NeXML</option>
-            <option value="phyloxml">PhyloXML</option>
-            <option value="cdao">CDAO</option>
-          </select>
-        </div>
-        <div class="field">
-          <label for="seed">Random seed <span class="hint">optional, for reproducibility</span></label>
-          <input type="number" id="seed" placeholder="random">
-        </div>
-
-      </div><!-- /grid -->
-
-      <button type="submit" id="run-btn" disabled>
-        <div class="spinner"></div>
-        <span id="btn-label">Loading…</span>
-      </button>
-    </form>
-  </div>
-
-  <!-- Output -->
-  <div id="output-section">
-    <div class="card">
-      <div class="card-title">Output files</div>
-      <div id="warnings"></div>
-      <div class="download-grid" id="download-grid"></div>
+        <button type="submit" id="run-btn" disabled>
+          <div class="spinner"></div>
+          <span id="btn-label">Loading…</span>
+        </button>
+      </form>
     </div>
+  </section>
+
+  <!-- Results -->
+  <div id="output-section">
+    <section>
+      <div class="section-label">Results</div>
+      <div class="panel">
+        <div id="warnings"></div>
+        <table class="output-table">
+          <thead>
+            <tr>
+              <th>File</th>
+              <th>Type</th>
+              <th>Description</th>
+              <th>Download</th>
+            </tr>
+          </thead>
+          <tbody id="output-tbody"></tbody>
+        </table>
+      </div>
+    </section>
   </div>
+
+  <footer>
+    <p>
+      FakeProt v0.2.0 &nbsp;·&nbsp;
+      WAG substitution model: Whelan &amp; Goldman (2001),
+      <a href="https://doi.org/10.1093/oxfordjournals.molbev.a003851" target="_blank" rel="noopener">
+        Mol. Biol. Evol. 18(5):691–699</a>
+      &nbsp;·&nbsp;
+      <a href="https://github.com/lucas-ebi/fakeprot" target="_blank" rel="noopener">GitHub</a>
+      &nbsp;·&nbsp; GPL-3.0
+    </p>
+  </footer>
 
 </main>
 
 <script>
 // ── File metadata ──────────────────────────────────────────────────────────
 function fileMeta(name) {
-  if (name.includes('all_sequences'))     return { icon: '🧬', desc: 'All sequences incl. ancestral nodes' };
-  if (name.includes('current_sequences')) return { icon: '🧬', desc: 'Extant (leaf) sequences only' };
-  if (name.includes('gene_tree'))         return { icon: '🌳', desc: 'Gene phylogeny with branch lengths' };
-  if (name.includes('species_cladogram')) return { icon: '🌿', desc: 'Species tree (topology only)' };
-  if (name.includes('OG_'))               return { icon: '🔬', desc: 'Ortholog group alignment' };
-  if (name.includes('ortholog_groups'))   return { icon: '📋', desc: 'Sequence → ortholog group mapping' };
-  if (name.includes('stereochemistry'))   return { icon: '⚗️',  desc: 'Per-column AA frequencies & class' };
-  if (name.includes('run_info'))          return { icon: '📄', desc: 'Run parameters & timestamp' };
-  return { icon: '📁', desc: '' };
+  if (name.includes('all_sequences'))          return { type: 'MSA',  desc: 'All sequences including ancestral nodes' };
+  if (name.includes('current_sequences'))      return { type: 'MSA',  desc: 'Extant (leaf) sequences only' };
+  if (name.includes('gene_tree'))              return { type: 'TREE', desc: 'Gene phylogeny with branch lengths' };
+  if (name.includes('species_cladogram'))      return { type: 'TREE', desc: 'Species tree (topology only)' };
+  if (name.includes('OG_'))                    return { type: 'MSA',  desc: 'Ortholog group alignment' };
+  if (name.includes('ortholog_groups'))        return { type: 'CSV',  desc: 'Sequence to ortholog group mapping' };
+  if (name.includes('physicochemical_groups')) return { type: 'CSV',  desc: 'Per-column AA frequencies and physicochemical group' };
+  if (name.includes('run_info'))               return { type: 'JSON', desc: 'Run parameters and timestamp' };
+  return { type: '—', desc: '' };
 }
 
 // ── Status helpers ─────────────────────────────────────────────────────────
@@ -391,22 +438,14 @@ function setStatus(msg, state = 'loading') {
   document.getElementById('status-dot').className = 'dot ' + state;
 }
 
-// ── Load fakeprot source files from GitHub into Pyodide's FS ──────────────
+// ── Load fakeprot source from GitHub into Pyodide's FS ────────────────────
 async function loadFakeprot(pyodide) {
-  const BASE = 'https://raw.githubusercontent.com/lucas-ebi/fakeprot/main/fakeprot/';
+  const BASE  = 'https://raw.githubusercontent.com/lucas-ebi/fakeprot/main/fakeprot/';
   const FILES = [
-    '__init__.py',
-    'config.py',
-    'substitution.py',
-    'simulation.py',
-    'models/__init__.py',
-    'models/sequence.py',
-    'models/species.py',
-    'evolution/__init__.py',
-    'evolution/mutation.py',
-    'evolution/tree.py',
-    'io/__init__.py',
-    'io/output.py',
+    '__init__.py', 'config.py', 'substitution.py', 'simulation.py',
+    'models/__init__.py', 'models/sequence.py', 'models/species.py',
+    'evolution/__init__.py', 'evolution/mutation.py', 'evolution/tree.py',
+    'io/__init__.py', 'io/output.py',
   ];
 
   for (const dir of ['fakeprot', 'fakeprot/models', 'fakeprot/evolution', 'fakeprot/io', 'output']) {
@@ -427,22 +466,22 @@ let pyodide;
 
 (async () => {
   try {
-    setStatus('Loading Pyodide…');
+    setStatus('Initialising Pyodide…');
     pyodide = await loadPyodide();
 
-    setStatus('Installing packages — first load takes ~30 s…');
+    setStatus('Installing packages — this may take a few seconds on first load…');
     await pyodide.loadPackage(['numpy', 'scipy', 'pandas', 'micropip']);
     await pyodide.runPythonAsync(`
 import micropip
 await micropip.install(["networkx", "biopython"])
 `);
 
-    setStatus('Loading FakeProt…');
+    setStatus('Loading FakeProt source…');
     await loadFakeprot(pyodide);
 
     setStatus('Ready', 'ready');
     document.getElementById('run-btn').disabled = false;
-    document.getElementById('btn-label').textContent = 'Generate';
+    document.getElementById('btn-label').textContent = 'Run simulation';
 
     document.getElementById('sim-form').addEventListener('submit', async e => {
       e.preventDefault();
@@ -464,14 +503,12 @@ async function runSimulation() {
   setStatus('Running simulation…');
   document.getElementById('output-section').style.display = 'none';
 
-  // Clear previous output
   try {
     pyodide.FS.readdir('/output')
       .filter(f => f !== '.' && f !== '..')
       .forEach(f => pyodide.FS.unlink('/output/' + f));
   } catch (_) {}
 
-  // Read form values
   const size        = parseInt(document.getElementById('size').value);
   const length      = parseInt(document.getElementById('length').value);
   const n_orthologs = parseInt(document.getElementById('n_orthologs').value);
@@ -516,7 +553,6 @@ finally:
 _warnings = _cap.getvalue().strip()
 `);
 
-    // Show any warnings
     const warnings = pyodide.globals.get('_warnings');
     const warnEl = document.getElementById('warnings');
     warnEl.innerHTML = '';
@@ -527,15 +563,12 @@ _warnings = _cap.getvalue().strip()
       warnEl.appendChild(div);
     }
 
-    // Build download cards
-    const grid = document.getElementById('download-grid');
-    grid.innerHTML = '';
+    const tbody = document.getElementById('output-tbody');
+    tbody.innerHTML = '';
 
     const files = pyodide.FS.readdir('/output').filter(f => f !== '.' && f !== '..');
-
-    // Sort: sequences first, trees, csvs, json last
     const order = ['all_sequences', 'current_sequences', 'OG_', 'gene_tree',
-                   'species_cladogram', 'ortholog_groups', 'stereochemistry', 'run_info'];
+                   'species_cladogram', 'ortholog_groups', 'physicochemical_groups', 'run_info'];
     files.sort((a, b) => {
       const ai = order.findIndex(k => a.includes(k));
       const bi = order.findIndex(k => b.includes(k));
@@ -547,33 +580,28 @@ _warnings = _cap.getvalue().strip()
       const url  = URL.createObjectURL(new Blob([data], { type: 'text/plain' }));
       const meta = fileMeta(filename);
 
-      const a = document.createElement('a');
-      a.className = 'dl-card';
-      a.href = url;
-      a.download = filename;
-      a.innerHTML = `
-        <span class="dl-icon">${meta.icon}</span>
-        <div class="dl-info">
-          <div class="dl-name">${filename}</div>
-          <div class="dl-desc">${meta.desc}</div>
-        </div>
-        <span class="dl-arrow">↓</span>`;
-      grid.appendChild(a);
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td class="file-name">${filename}</td>
+        <td class="file-type">${meta.type}</td>
+        <td class="file-desc">${meta.desc}</td>
+        <td><a class="dl-link" href="${url}" download="${filename}">Download</a></td>`;
+      tbody.appendChild(tr);
     }
 
     document.getElementById('output-section').style.display = 'block';
     document.getElementById('output-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
-    setStatus(`Done — ${files.length} file${files.length !== 1 ? 's' : ''} ready to download`, 'ready');
+    setStatus(`Completed — ${files.length} output file${files.length !== 1 ? 's' : ''} generated`, 'ready');
 
   } catch (err) {
     await pyodide.runPythonAsync(`import sys\nsys.stdout = sys.__stdout__`).catch(() => {});
-    setStatus('Simulation failed: ' + err.message, 'error');
+    setStatus('Simulation error: ' + err.message, 'error');
     console.error(err);
   }
 
   btn.disabled = false;
   btn.classList.remove('running');
-  document.getElementById('btn-label').textContent = 'Generate';
+  document.getElementById('btn-label').textContent = 'Run simulation';
 }
 </script>
 </body>
