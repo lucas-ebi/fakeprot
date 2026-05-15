@@ -602,7 +602,7 @@ async function loadFakeprot(pyodide) {
   const BASE  = 'https://raw.githubusercontent.com/lucas-ebi/fakeprot/main/fakeprot/';
   const FILES = [
     '__init__.py','config.py','substitution.py','simulation.py',
-    'models/__init__.py','models/sequence.py','models/species.py',
+    'models/__init__.py','models/sequence.py','models/species.py','models/msa_store.py',
     'evolution/__init__.py','evolution/mutation.py','evolution/tree.py',
     'io/__init__.py','io/output.py',
   ];
@@ -625,7 +625,7 @@ let pyodide;
     setStatus('Initialising Pyodide…');
     pyodide = await loadPyodide();
     setStatus('Installing packages…');
-    await pyodide.loadPackage(['numpy','scipy','pandas','micropip']);
+    await pyodide.loadPackage(['numpy','pandas','micropip']);
     await pyodide.runPythonAsync(`
 import micropip
 await micropip.install(["networkx","biopython"])
