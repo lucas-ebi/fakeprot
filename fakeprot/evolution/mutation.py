@@ -5,6 +5,7 @@ Mutation, indel, and rate-distribution logic for sequence evolution.
 from __future__ import annotations
 
 import numpy as np
+from scipy.stats import gamma
 
 from fakeprot.config import SimulationConfig
 from fakeprot.models.msa_store import MsaStore, decode_pc, encode_row
@@ -79,7 +80,8 @@ def mutation_rate_distribution(
     else:
         shape, scale = config.gamma_shape, config.gamma_scale
 
-    rates = np.random.gamma(shape, scale, length - 1).clip(0.0, 1.0).tolist()
+    x = np.linspace(gamma.ppf(0.01, shape), gamma.ppf(0.99, shape), length - 1)
+    rates = gamma.pdf(x, shape, scale=scale).tolist()
     return [0.0] + wave_shuffle(rates)
 
 
