@@ -20,8 +20,8 @@ _aa_freq_raw = np.array([
 ])
 AA_FREQUENCIES: np.ndarray = _aa_freq_raw / _aa_freq_raw.sum()
 
-# Physicochemical groupings used to constrain stereochemistry during evolution
-STEREOCHEMICAL_SETS: dict[str, list[str]] = {
+# Physicochemical groups used to bias conservative amino acid substitutions
+PHYSICOCHEMICAL_SETS: dict[str, list[str]] = {
     "Amide":                ["N", "Q"],
     "Aliphatic":            ["G", "A", "V", "L", "I"],
     "Basic":                ["H", "K", "R"],
@@ -42,17 +42,17 @@ STEREOCHEMICAL_SETS: dict[str, list[str]] = {
     "Similar (Gln or Glu)": ["Q", "E"],
 }
 
-STEREOCHEMICAL_GROUPS: list[str] = list(STEREOCHEMICAL_SETS.keys())
+PHYSICOCHEMICAL_GROUPS: list[str] = list(PHYSICOCHEMICAL_SETS.keys())
 
 # Boolean membership mask for each group over the 20 canonical AAs
-SC_MASKS: dict[str, np.ndarray] = {
+PC_MASKS: dict[str, np.ndarray] = {
     group: np.array([aa in members for aa in AMINO_ACIDS])
-    for group, members in STEREOCHEMICAL_SETS.items()
+    for group, members in PHYSICOCHEMICAL_SETS.items()
 }
 
-# Background frequencies for stereochemical groups (proportional to sum of member AA frequencies)
-_sc_totals = np.array([AA_FREQUENCIES[SC_MASKS[g]].sum() for g in STEREOCHEMICAL_GROUPS])
-SC_FREQUENCIES: np.ndarray = _sc_totals / _sc_totals.sum()
+# Background frequencies for physicochemical groups (proportional to sum of member AA frequencies)
+_pc_totals = np.array([AA_FREQUENCIES[PC_MASKS[g]].sum() for g in PHYSICOCHEMICAL_GROUPS])
+PC_FREQUENCIES: np.ndarray = _pc_totals / _pc_totals.sum()
 
 # WAG conditional substitution probabilities (off-diagonal only; rows sum to 1 excluding self)
 _WAG_RAW: dict[str, dict[str, float]] = {
@@ -145,21 +145,21 @@ for _i, _from in enumerate(AMINO_ACIDS):
         if _from != _to:
             WAG_MATRIX[_i, _j] = _WAG_RAW[_from].get(_to, 0.0)
 
-# Mean substitution probability between stereochemical groups, normalized per source group
-_sc_subs_raw: dict[str, dict[str, float]] = {}
-for _group_a in STEREOCHEMICAL_GROUPS:
-    _sc_subs_raw[_group_a] = {}
-    for _group_b in STEREOCHEMICAL_GROUPS:
+# Mean substitution probability between physicochemical groups, normalized per source group
+_pc_subs_raw: dict[str, dict[str, float]] = {}
+for _group_a in PHYSICOCHEMICAL_GROUPS:
+    _pc_subs_raw[_group_a] = {}
+    for _group_b in PHYSICOCHEMICAL_GROUPS:
         if _group_b != _group_a:
             vals = [
                 _WAG_RAW[x].get(y, 0.0)
-                for x in STEREOCHEMICAL_SETS[_group_a]
-                for y in STEREOCHEMICAL_SETS[_group_b]
+                for x in PHYSICOCHEMICAL_SETS[_group_a]
+                for y in PHYSICOCHEMICAL_SETS[_group_b]
                 if y != x
             ]
-            _sc_subs_raw[_group_a][_group_b] = float(np.mean(vals)) if vals else 0.0
+            _pc_subs_raw[_group_a][_group_b] = float(np.mean(vals)) if vals else 0.0
 
-SC_SUBS_MATRIX: dict[str, dict[str, float]] = {
-    a: {b: v / sum(_sc_subs_raw[a].values()) for b, v in _sc_subs_raw[a].items()}
-    for a in _sc_subs_raw
+PC_SUBS_MATRIX: dict[str, dict[str, float]] = {
+    a: {b: v / sum(_pc_subs_raw[a].values()) for b, v in _pc_subs_raw[a].items()}
+    for a in _pc_subs_raw
 }

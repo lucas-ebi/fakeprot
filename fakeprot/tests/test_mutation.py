@@ -114,9 +114,9 @@ class TestApplyGaps:
         assert n == 1
         assert seq.sequence == "AC-GT"
         assert len(seq.mutation_rates) == 5
-        assert len(seq.stereochemistry) == 5
+        assert len(seq.pc_groups) == 5
         assert seq.mutation_rates[2] == 1.0
-        assert seq.stereochemistry[2] is None
+        assert seq.pc_groups[2] is None
 
     def test_multiple_gaps_applied_in_reverse(self):
         sp = Species(paralogs=[], label="sp0")

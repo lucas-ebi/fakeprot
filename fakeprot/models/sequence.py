@@ -13,7 +13,7 @@ class Sequence:
 
     sequence: str
     mutation_rates: list[float]
-    stereochemistry: list[str | None]
+    pc_groups: list[str | None]
     host: "Species"
     idx: int
 

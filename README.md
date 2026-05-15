@@ -2,7 +2,7 @@
 
 Generate artificial protein families by simulating protein evolution.
 
-FakeProt builds a species tree by repeatedly applying speciation and gene duplication events. At each node, sequences evolve under the [WAG substitution model](https://doi.org/10.1093/oxfordjournals.molbev.a003851) with gamma-distributed site rates and optional stereochemical constraints on amino acid identity. The result is a set of synthetic sequences with known phylogeny, ortholog groups, and ancestral states — useful for benchmarking aligners, tree reconstruction methods, and ortholog detection tools.
+FakeProt builds a species tree by repeatedly applying speciation and gene duplication events. At each node, sequences evolve under the [WAG substitution model](https://doi.org/10.1093/oxfordjournals.molbev.a003851) with gamma-distributed site rates and probabilistic physicochemical constraints on amino acid identity. The result is a set of synthetic sequences with known phylogeny, ortholog groups, and ancestral states — useful for benchmarking aligners, tree reconstruction methods, and ortholog detection tools.
 
 ## Installation
 

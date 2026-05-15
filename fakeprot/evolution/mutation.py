@@ -14,16 +14,16 @@ from fakeprot.substitution import (
     AA_FREQUENCIES,
     AA_INDEX,
     AMINO_ACIDS,
-    SC_FREQUENCIES,
-    SC_MASKS,
-    SC_SUBS_MATRIX,
-    STEREOCHEMICAL_GROUPS,
-    STEREOCHEMICAL_SETS,
+    PC_FREQUENCIES,
+    PC_MASKS,
+    PC_SUBS_MATRIX,
+    PHYSICOCHEMICAL_GROUPS,
+    PHYSICOCHEMICAL_SETS,
     WAG_MATRIX,
 )
 
 ROOT_AMINO_ACID = "M"
-ROOT_STEREOCHEMISTRY = "With sulfur"  # Met belongs to the sulfur group
+ROOT_PC_GROUP = "With sulfur"  # Met belongs to the sulfur group
 
 
 def wave_shuffle(values: list[float]) -> list[float]:
@@ -117,7 +117,7 @@ def apply_gaps(collection: list[Sequence], gaps: list[int]) -> int:
         for seq in collection:
             seq.sequence = seq.sequence[: pos + 1] + "-" + seq.sequence[pos + 1 :]
             seq.mutation_rates = seq.mutation_rates[: pos + 1] + [1.0] + seq.mutation_rates[pos + 1 :]
-            seq.stereochemistry = seq.stereochemistry[: pos + 1] + [None] + seq.stereochemistry[pos + 1 :]
+            seq.pc_groups = seq.pc_groups[: pos + 1] + [None] + seq.pc_groups[pos + 1 :]
     return len(gaps)
 
 
@@ -134,11 +134,11 @@ def _prepare_evolution_state(
     """
     Return (residues, rates, stereochemistry) ready for mutation.
 
-    In duplication mode: re-draws rates and updates stereochemical constraints,
+    In duplication mode: re-draws rates and updates physicochemical constraints,
     reflecting relaxed purifying selection on the new copy.
     """
     if not duplication:
-        return list(parent.sequence), list(parent.mutation_rates), list(parent.stereochemistry)
+        return list(parent.sequence), list(parent.mutation_rates), list(parent.pc_groups)
 
     # Re-draw rates, preserving rank order from the parent
     new_rates = mutation_rate_distribution(len(parent.sequence), config, duplication=True)
@@ -148,24 +148,24 @@ def _prepare_evolution_state(
     current_rates = [reranked[i] for i in range(len(parent.sequence))]
 
     residues = list(parent.sequence)
-    stereo: list[str | None] = [parent.stereochemistry[0]]
+    stereo: list[str | None] = [parent.pc_groups[0]]
 
     for i in range(1, len(residues)):
         rate = current_rates[i]
-        # With probability (1 - rate) the site acquires / retains a stereochemical class
+        # With probability (1 - rate) the site acquires / retains a physicochemical class
         if np.random.choice((True, False), p=(1.0 - rate, rate)):
-            if parent.stereochemistry[i] is None:
-                new_sc = np.random.choice(STEREOCHEMICAL_GROUPS, p=SC_FREQUENCIES)
+            if parent.pc_groups[i] is None:
+                new_sc = np.random.choice(PHYSICOCHEMICAL_GROUPS, p=PC_FREQUENCIES)
             else:
-                p_sc = {k: rate * v for k, v in SC_SUBS_MATRIX[parent.stereochemistry[i]].items()}
-                p_sc[parent.stereochemistry[i]] = 1.0 - rate
+                p_sc = {k: rate * v for k, v in PC_SUBS_MATRIX[parent.pc_groups[i]].items()}
+                p_sc[parent.pc_groups[i]] = 1.0 - rate
                 keys = list(p_sc.keys())
                 vals = np.array(list(p_sc.values()))
                 new_sc = np.random.choice(keys, p=vals / vals.sum())
             stereo.append(new_sc)
             # Force residue into the new class if it has drifted out
-            if residues[i] not in STEREOCHEMICAL_SETS[new_sc]:
-                mask = SC_MASKS[new_sc]
+            if residues[i] not in PHYSICOCHEMICAL_SETS[new_sc]:
+                mask = PC_MASKS[new_sc]
                 if residues[i] == "-":
                     p = AA_FREQUENCIES * mask
                 else:
@@ -179,15 +179,15 @@ def _prepare_evolution_state(
 
 
 def _sample_aa_unconstrained(rate: float, aa_idx: int) -> str:
-    """Draw a new amino acid using WAG probabilities with no stereochemical constraint."""
+    """Draw a new amino acid using WAG probabilities with no physicochemical group constraint."""
     p = WAG_MATRIX[aa_idx] * rate
     p[aa_idx] = 1.0 - rate
     return AMINO_ACIDS[np.random.choice(20, p=p / p.sum())]
 
 
 def _sample_aa_constrained(rate: float, aa_idx: int, group: str) -> str:
-    """Draw a new amino acid restricted to a stereochemical group."""
-    mask = SC_MASKS[group].copy()
+    """Draw a new amino acid restricted to a physicochemical group by WAG probabilities."""
+    mask = PC_MASKS[group].copy()
     mask[aa_idx] = False  # diagonal handled separately
     p = WAG_MATRIX[aa_idx] * mask
     total = p.sum()
@@ -263,7 +263,7 @@ def _handle_gap_region(
                 if stereo[i] is None:
                     aa = AMINO_ACIDS[np.random.choice(20, p=AA_FREQUENCIES)]
                 else:
-                    mask = SC_MASKS[stereo[i]]
+                    mask = PC_MASKS[stereo[i]]
                     p = AA_FREQUENCIES * mask
                     aa = AMINO_ACIDS[np.random.choice(20, p=p / p.sum())]
                 new_seq.append(aa)

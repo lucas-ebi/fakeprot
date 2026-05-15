@@ -11,7 +11,7 @@ import networkx as nx
 from fakeprot.config import SimulationConfig
 from fakeprot.evolution.mutation import (
     ROOT_AMINO_ACID,
-    ROOT_STEREOCHEMISTRY,
+    ROOT_PC_GROUP,
     apply_gaps,
     make_mutant,
     mutation_rate_distribution,
@@ -22,10 +22,9 @@ from fakeprot.models.species import Species
 from fakeprot.substitution import (
     AA_FREQUENCIES,
     AMINO_ACIDS,
-    SC_FREQUENCIES,
-    SC_MASKS,
-    STEREOCHEMICAL_GROUPS,
-    STEREOCHEMICAL_SETS,
+    PC_FREQUENCIES,
+    PC_MASKS,
+    PHYSICOCHEMICAL_GROUPS,
 )
 
 
@@ -36,9 +35,9 @@ def run(config: SimulationConfig) -> None:
     sequence_tree: nx.DiGraph = nx.DiGraph()
 
     mutation_rates = mutation_rate_distribution(config.length, config)
-    root_seq_str, root_stereo = _generate_root_sequence(config.length, mutation_rates)
+    root_seq_str, root_pc_groups = _generate_root_sequence(config.length, mutation_rates)
 
-    root_sequence = Sequence(root_seq_str, mutation_rates, root_stereo, root_species, 0)
+    root_sequence = Sequence(root_seq_str, mutation_rates, root_pc_groups, root_species, 0)
     collection: list[Sequence] = [root_sequence]
     root_species.paralogs.append(root_sequence)
     species_tree.add_node(root_species)
@@ -96,25 +95,25 @@ def _generate_root_sequence(
     Build the ancestral root sequence.
 
     Position 0 is always Met (all natural proteins start with Met).
-    Each subsequent site either acquires a stereochemical class (if its mutation
+    Each subsequent site either acquires a physicochemical group (if its mutation
     rate is low) or is drawn freely from background frequencies.
     """
     sequence = ROOT_AMINO_ACID
-    stereochemistry: list[str | None] = [ROOT_STEREOCHEMISTRY]
+    pc_groups: list[str | None] = [ROOT_PC_GROUP]
 
     for i in range(1, length):
         rate = mutation_rates[i]
         if np.random.choice((True, False), p=(1.0 - rate, rate)):
-            sc = np.random.choice(STEREOCHEMICAL_GROUPS, p=SC_FREQUENCIES)
-            stereochemistry.append(sc)
-            mask = SC_MASKS[sc]
+            sc = np.random.choice(PHYSICOCHEMICAL_GROUPS, p=PC_FREQUENCIES)
+            pc_groups.append(sc)
+            mask = PC_MASKS[sc]
             p = AA_FREQUENCIES * mask
             sequence += AMINO_ACIDS[np.random.choice(20, p=p / p.sum())]
         else:
-            stereochemistry.append(None)
+            pc_groups.append(None)
             sequence += AMINO_ACIDS[np.random.choice(20, p=AA_FREQUENCIES)]
 
-    return sequence, stereochemistry
+    return sequence, pc_groups
 
 
 def _do_speciation(

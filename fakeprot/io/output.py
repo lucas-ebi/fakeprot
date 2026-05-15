@@ -53,7 +53,7 @@ def write_outputs(
     _write_ortholog_groups_csv(config, ortholog_groups, orthologs)
     if config.n_orthologs > 1:
         _write_ortholog_alignments(config, ortholog_groups)
-    _write_stereochemistry_csv(config, ortholog_groups, orthologs, sequence_length)
+    _write_pc_groups_csv(config, ortholog_groups, orthologs, sequence_length)
     _write_run_info(config)
 
 
@@ -129,7 +129,7 @@ def _write_ortholog_alignments(
             AlignIO.write(alignment, fh, config.msa_format)
 
 
-def _write_stereochemistry_csv(
+def _write_pc_groups_csv(
     config: SimulationConfig,
     ortholog_groups: dict[int, list[Sequence]],
     orthologs: list[Sequence],
@@ -154,12 +154,12 @@ def _write_stereochemistry_csv(
                     f"{seq3(aa)}:{pct * 100:.2f}%"
                     for aa, pct in sorted(freq.items(), key=lambda x: x[1], reverse=True)
                 )
-                entry = f"{ancestor.stereochemistry[col]} ({freq_str})"
+                entry = f"{ancestor.pc_groups[col]} ({freq_str})"
             else:
-                entry = ancestor.stereochemistry[col]
+                entry = ancestor.pc_groups[col]
             columns[f"OG {og_label(j)}"].append(entry)
 
-    DataFrame(columns).to_csv(f"{config.out}_stereochemistry.csv", index=False)
+    DataFrame(columns).to_csv(f"{config.out}_physicochemical_groups.csv", index=False)
 
 
 def _write_run_info(config: SimulationConfig) -> None:
