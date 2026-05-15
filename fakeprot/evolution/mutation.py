@@ -4,18 +4,17 @@ Mutation, indel, and rate-distribution logic for sequence evolution.
 
 from __future__ import annotations
 
-from collections import Counter
-
 import numpy as np
 from scipy.stats import gamma
 
 from fakeprot.config import SimulationConfig
+from fakeprot.models.msa_store import MsaStore, decode_pc, encode_row
 from fakeprot.models.sequence import Sequence
-from fakeprot.models.species import Species
 from fakeprot.substitution import (
     AA_FREQUENCIES,
     AA_INDEX,
     AMINO_ACIDS,
+    CHAR_GAP,
     PC_FREQUENCIES,
     PC_MASKS,
     PC_SUBS_MATRIX,
@@ -87,62 +86,35 @@ def mutation_rate_distribution(
 
 
 def make_mutant(
+    store: MsaStore,
     parent: Sequence,
-    new_host: Species,
-    new_idx: int,
     config: SimulationConfig,
     duplication: bool = False,
-) -> tuple[Sequence, list[int]]:
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, list[int]]:
     """
-    Derive a new sequence by evolving parent along one branch.
+    Compute child sequence arrays from parent without committing to the store.
 
-    Returns the child Sequence and a list of gap positions that must be
-    inserted into all other sequences to maintain alignment (see apply_gaps).
+    Returns (chars, rates, pc, gaps).  Caller must:
+      1. apply_gaps(store, gaps)   — extend existing rows to the new length
+      2. row = store.add_row(chars, rates, pc)   — append child at that length
+      3. child = Sequence(row, new_host, new_idx)
     """
-    residues, rates, stereo = _prepare_evolution_state(parent, config, duplication)
+    residues, rates, stereo = _prepare_evolution_state(store, parent, config, duplication)
     new_seq, new_rates, new_stereo, gaps = _apply_mutations_and_indels(
         residues, rates, stereo, config
     )
-    child = Sequence(new_seq, new_rates, new_stereo, new_host, new_idx)
-    return child, gaps
+    chars, rates_arr, pc_arr = encode_row(list(new_seq), new_rates, new_stereo)
+    return chars, rates_arr, pc_arr, gaps
 
 
-def apply_gaps(collection: list[Sequence], gaps: list[int]) -> int:
+def apply_gaps(store: MsaStore, gaps: list[int]) -> int:
     """
     Insert gap columns into every sequence to preserve alignment after insertions.
 
-    Builds each updated sequence in a single pass (one allocation per sequence)
-    instead of one allocation per gap position. Returns the number of columns added.
+    Delegates to MsaStore.insert_gaps which uses np.insert across all rows at once.
+    Returns the number of columns added.
     """
-    if not gaps:
-        return 0
-    gap_counts = Counter(gaps)
-    sorted_positions = sorted(gap_counts)
-    for seq in collection:
-        s = seq.sequence
-        r = seq.mutation_rates
-        p = seq.pc_groups
-        parts_s: list[str] = []
-        parts_r: list[float] = []
-        parts_p: list[str | None] = []
-        prev = 0
-        for g in sorted_positions:
-            end = g + 1
-            parts_s.append(s[prev:end])
-            parts_r += r[prev:end]
-            parts_p += p[prev:end]
-            count = gap_counts[g]
-            parts_s.append("-" * count)
-            parts_r += [1.0] * count
-            parts_p += [None] * count
-            prev = end
-        parts_s.append(s[prev:])
-        parts_r += r[prev:]
-        parts_p += p[prev:]
-        seq.sequence = "".join(parts_s)
-        seq.mutation_rates = parts_r
-        seq.pc_groups = parts_p
-    return len(gaps)
+    return store.insert_gaps(gaps)
 
 
 # ---------------------------------------------------------------------------
@@ -151,6 +123,7 @@ def apply_gaps(collection: list[Sequence], gaps: list[int]) -> int:
 
 
 def _prepare_evolution_state(
+    store: MsaStore,
     parent: Sequence,
     config: SimulationConfig,
     duplication: bool,
@@ -161,33 +134,34 @@ def _prepare_evolution_state(
     In duplication mode: re-draws rates and updates physicochemical constraints,
     reflecting relaxed purifying selection on the new copy.
     """
+    chars_row = store.chars[parent.row]
+    rates     = store.rates[parent.row].tolist()
+    stereo    = decode_pc(store.pc[parent.row])
+    residues  = [AMINO_ACIDS[int(c)] if c < CHAR_GAP else "-" for c in chars_row]
+
     if not duplication:
-        return list(parent.sequence), list(parent.mutation_rates), list(parent.pc_groups)
+        return residues, rates, stereo
 
     # Re-draw rates, preserving rank order from the parent
-    new_rates = mutation_rate_distribution(len(parent.sequence), config, duplication=True)
-    ranked_positions = sorted(range(len(parent.sequence)), key=lambda i: parent.mutation_rates[i])
+    new_rates = mutation_rate_distribution(len(residues), config, duplication=True)
+    ranked_positions = sorted(range(len(residues)), key=lambda i: rates[i])
     sorted_new = sorted(new_rates)
     reranked = dict(zip(ranked_positions, sorted_new))
-    current_rates = [reranked[i] for i in range(len(parent.sequence))]
+    current_rates = [reranked[i] for i in range(len(residues))]
 
-    residues = list(parent.sequence)
-    stereo: list[str | None] = [parent.pc_groups[0]]
-
+    new_stereo: list[str | None] = [stereo[0]]
     for i in range(1, len(residues)):
         rate = current_rates[i]
-        # With probability (1 - rate) the site acquires / retains a physicochemical class
         if np.random.random() < (1.0 - rate):
-            if parent.pc_groups[i] is None:
+            if stereo[i] is None:
                 new_sc = np.random.choice(PHYSICOCHEMICAL_GROUPS, p=PC_FREQUENCIES)
             else:
-                p_sc = {k: rate * v for k, v in PC_SUBS_MATRIX[parent.pc_groups[i]].items()}
-                p_sc[parent.pc_groups[i]] = 1.0 - rate
+                p_sc = {k: rate * v for k, v in PC_SUBS_MATRIX[stereo[i]].items()}
+                p_sc[stereo[i]] = 1.0 - rate
                 keys = list(p_sc.keys())
                 vals = np.array(list(p_sc.values()))
                 new_sc = np.random.choice(keys, p=vals / vals.sum())
-            stereo.append(new_sc)
-            # Force residue into the new class if it has drifted out
+            new_stereo.append(new_sc)
             if residues[i] not in PHYSICOCHEMICAL_SETS[new_sc]:
                 mask = PC_MASKS[new_sc]
                 if residues[i] == "-":
@@ -197,9 +171,9 @@ def _prepare_evolution_state(
                 p = p / p.sum()
                 residues[i] = AMINO_ACIDS[np.random.choice(20, p=p)]
         else:
-            stereo.append(None)
+            new_stereo.append(None)
 
-    return residues, current_rates, stereo
+    return residues, current_rates, new_stereo
 
 
 def _sample_aa_unconstrained(rate: float, aa_idx: int) -> str:
@@ -333,7 +307,6 @@ def _handle_residue(
         new_rates.append(rate)
         new_stereo.append(stereo[i])
 
-        # Insertions after this position, with geometrically decreasing probability
         j = 0
         done = False
         while not done:

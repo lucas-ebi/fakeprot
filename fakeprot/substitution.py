@@ -163,3 +163,7 @@ PC_SUBS_MATRIX: dict[str, dict[str, float]] = {
     a: {b: v / sum(_pc_subs_raw[a].values()) for b, v in _pc_subs_raw[a].items()}
     for a in _pc_subs_raw
 }
+
+PC_INDEX: dict[str, int] = {g: i for i, g in enumerate(PHYSICOCHEMICAL_GROUPS)}
+CHAR_GAP: int = 20   # uint8 sentinel for a gap column
+PC_NONE: int = -1    # int8 sentinel for no physicochemical group

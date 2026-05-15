@@ -7,41 +7,43 @@ from __future__ import annotations
 import string
 
 import networkx as nx
-from Bio import Phylo
+import numpy as np
 from Bio.Phylo.BaseTree import Clade
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 
+from fakeprot.models.msa_store import MsaStore, decode_chars
 from fakeprot.models.sequence import Sequence
 from fakeprot.models.species import Species
 
 
-def build_msa(graph: nx.DiGraph, node: Sequence) -> list[SeqRecord]:
+def build_msa(graph: nx.DiGraph, node: Sequence, store: MsaStore) -> list[SeqRecord]:
     """Collect leaf SeqRecord objects in tree traversal order."""
     if graph.out_degree(node) == 0:
         return []
     records: list[SeqRecord] = []
     for child in graph.successors(node):
         if graph.out_degree(child) == 0:
-            records.append(SeqRecord(Seq(child.sequence), id=str(child), description=""))
+            records.append(
+                SeqRecord(Seq(decode_chars(store.chars[child.row])), id=str(child), description="")
+            )
         else:
-            records.extend(build_msa(graph, child))
+            records.extend(build_msa(graph, child, store))
     return records
 
 
 def get_branch_length(
-    graph: nx.DiGraph, node: Sequence, sequence_length: int
+    graph: nx.DiGraph, node: Sequence, sequence_length: int, store: MsaStore
 ) -> float | None:
     """Branch length as the fraction of mismatched positions to the parent."""
     if graph.in_degree(node) == 0:
         return None
     parent = next(graph.predecessors(node))
-    mismatches = sum(1 for x, y in zip(parent.sequence, node.sequence) if x != y)
-    return mismatches / sequence_length
+    return int(np.sum(store.chars[parent.row] != store.chars[node.row])) / sequence_length
 
 
 def build_gene_tree(
-    graph: nx.DiGraph, node: Sequence, sequence_length: int
+    graph: nx.DiGraph, node: Sequence, sequence_length: int, store: MsaStore
 ) -> Clade:
     """Recursively build a Clade tree from the sequence DAG, with branch lengths."""
     clades: list[Clade] = []
@@ -50,15 +52,15 @@ def build_gene_tree(
             clades.append(
                 Clade(
                     name=str(child),
-                    branch_length=get_branch_length(graph, child, sequence_length),
+                    branch_length=get_branch_length(graph, child, sequence_length, store),
                 )
             )
         else:
-            clades.append(build_gene_tree(graph, child, sequence_length))
+            clades.append(build_gene_tree(graph, child, sequence_length, store))
     return Clade(
         name=str(node),
         clades=clades,
-        branch_length=get_branch_length(graph, node, sequence_length),
+        branch_length=get_branch_length(graph, node, sequence_length, store),
     )
 
 

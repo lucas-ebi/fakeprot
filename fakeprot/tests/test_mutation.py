@@ -10,6 +10,7 @@ from fakeprot.evolution.mutation import (
     mutation_rate_distribution,
     wave_shuffle,
 )
+from fakeprot.models.msa_store import MsaStore, decode_chars, encode_row
 from fakeprot.models.sequence import Sequence
 from fakeprot.models.species import Species
 from fakeprot.substitution import AMINO_ACIDS
@@ -26,11 +27,15 @@ def simple_species() -> Species:
 
 
 @pytest.fixture
-def simple_sequence(simple_species: Species) -> Sequence:
+def simple_store_and_seq(simple_species: Species) -> tuple[MsaStore, Sequence]:
     np.random.seed(0)
+    residues = list("M" + "A" * 19)
     rates = [0.0] + [0.1] * 19
     stereo = [None] * 20
-    return Sequence("M" + "A" * 19, rates, stereo, simple_species, 0)
+    chars, rates_arr, pc_arr = encode_row(residues, rates, stereo)
+    store = MsaStore(chars, rates_arr, pc_arr)
+    seq = Sequence(row=0, host=simple_species, idx=0)
+    return store, seq
 
 
 class TestWaveShuffle:
@@ -71,63 +76,82 @@ class TestMutationRateDistribution:
     def test_seeded_run_is_reproducible(self):
         c1 = SimulationConfig(size=10, length=20, seed=7)
         r1 = mutation_rate_distribution(20, c1)
-        # Re-seed by constructing a second config with the same seed
         c2 = SimulationConfig(size=10, length=20, seed=7)
         r2 = mutation_rate_distribution(20, c2)
         assert r1 == pytest.approx(r2)
 
 
 class TestMakeMutant:
-    def test_produces_valid_amino_acids(self, simple_sequence: Sequence, config: SimulationConfig):
-        new_host = Species(paralogs=[], label="sp1")
-        child, gaps = make_mutant(simple_sequence, new_host, 0, config)
+    def test_produces_valid_amino_acids(
+        self, simple_store_and_seq: tuple[MsaStore, Sequence], config: SimulationConfig
+    ):
+        store, parent = simple_store_and_seq
+        child, _ = store.commit_child(*make_mutant(store, parent, config),
+                                      Species(paralogs=[], label="sp1"), 0)
         valid = set(AMINO_ACIDS) | {"-"}
-        for aa in child.sequence:
+        for aa in decode_chars(store.chars[child.row]):
             assert aa in valid
 
-    def test_child_label(self, simple_sequence: Sequence, config: SimulationConfig):
+    def test_child_label(
+        self, simple_store_and_seq: tuple[MsaStore, Sequence], config: SimulationConfig
+    ):
+        store, parent = simple_store_and_seq
         new_host = Species(paralogs=[], label="spX")
-        child, _ = make_mutant(simple_sequence, new_host, 0, config)
+        child, _ = store.commit_child(*make_mutant(store, parent, config), new_host, 0)
         assert child.label == "spX_seq1"
 
-    def test_gaps_list_is_list_of_ints(self, simple_sequence: Sequence, config: SimulationConfig):
-        new_host = Species(paralogs=[], label="sp1")
-        _, gaps = make_mutant(simple_sequence, new_host, 0, config)
+    def test_gaps_list_is_list_of_ints(
+        self, simple_store_and_seq: tuple[MsaStore, Sequence], config: SimulationConfig
+    ):
+        store, parent = simple_store_and_seq
+        _, _, _, gaps = make_mutant(store, parent, config)
         assert isinstance(gaps, list)
         assert all(isinstance(g, int) for g in gaps)
 
-    def test_duplication_mode(self, simple_sequence: Sequence, config: SimulationConfig):
+    def test_duplication_mode(
+        self, simple_store_and_seq: tuple[MsaStore, Sequence], config: SimulationConfig
+    ):
+        store, parent = simple_store_and_seq
         np.random.seed(5)
-        new_host = Species(paralogs=[], label="sp_dup")
-        child, _ = make_mutant(simple_sequence, new_host, 1, config, duplication=True)
+        child, _ = store.commit_child(*make_mutant(store, parent, config, duplication=True),
+                                      Species(paralogs=[], label="sp_dup"), 1)
         valid = set(AMINO_ACIDS) | {"-"}
-        for aa in child.sequence:
+        for aa in decode_chars(store.chars[child.row]):
             assert aa in valid
 
 
 class TestApplyGaps:
-    def test_inserts_gaps_correctly(self):
-        sp = Species(paralogs=[], label="sp0")
-        seq = Sequence("ACGT", [0.1, 0.2, 0.3, 0.4], [None] * 4, sp, 0)
-        collection = [seq]
-        n = apply_gaps(collection, [1])
-        assert n == 1
-        assert seq.sequence == "AC-GT"
-        assert len(seq.mutation_rates) == 5
-        assert len(seq.pc_groups) == 5
-        assert seq.mutation_rates[2] == 1.0
-        assert seq.pc_groups[2] is None
+    def _make_store(self, seq_str: str, rates: list[float], stereo: list) -> MsaStore:
+        chars, rates_arr, pc_arr = encode_row(list(seq_str), rates, stereo)
+        return MsaStore(chars, rates_arr, pc_arr)
 
-    def test_multiple_gaps_applied_in_reverse(self):
-        sp = Species(paralogs=[], label="sp0")
-        seq = Sequence("ABCDE", [0.1] * 5, [None] * 5, sp, 0)
-        n = apply_gaps([seq], [0, 2])
+    def test_inserts_gap_correctly(self):
+        store = self._make_store("ACGT", [0.1, 0.2, 0.3, 0.4], [None] * 4)
+        n = apply_gaps(store, [1])
+        assert n == 1
+        assert decode_chars(store.chars[0]) == "AC-GT"
+        assert store.rates[0, 2] == pytest.approx(1.0)
+        assert store.pc[0, 2] == -1
+
+    def test_multiple_gaps(self):
+        store = self._make_store("ACGDE", [0.1] * 5, [None] * 5)
+        n = apply_gaps(store, [0, 2])
         assert n == 2
-        assert len(seq.sequence) == 7
+        assert store.chars.shape[1] == 7
 
     def test_no_gaps_is_noop(self):
-        sp = Species(paralogs=[], label="sp0")
-        seq = Sequence("ACGT", [0.1] * 4, [None] * 4, sp, 0)
-        n = apply_gaps([seq], [])
+        store = self._make_store("ACGT", [0.1] * 4, [None] * 4)
+        n = apply_gaps(store, [])
         assert n == 0
-        assert seq.sequence == "ACGT"
+        assert decode_chars(store.chars[0]) == "ACGT"
+
+    def test_all_rows_updated(self):
+        chars1, r1, p1 = encode_row(list("ACGT"), [0.1] * 4, [None] * 4)
+        store = MsaStore(chars1, r1, p1)
+        chars2, r2, p2 = encode_row(list("MRND"), [0.2] * 4, [None] * 4)
+        store.add_row(chars2, r2, p2)
+        apply_gaps(store, [1])
+        assert store.n_rows == 2
+        assert store.length == 5
+        assert decode_chars(store.chars[0]) == "AC-GT"
+        assert decode_chars(store.chars[1]) == "MR-ND"

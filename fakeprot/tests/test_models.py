@@ -30,24 +30,24 @@ class TestSimulationConfig:
 class TestSequenceModel:
     def test_label_property(self):
         sp = Species(paralogs=[], label="sp3")
-        seq = Sequence("MAAAA", [0.0] * 5, [None] * 5, sp, 2)
+        seq = Sequence(row=0, host=sp, idx=2)
         assert seq.label == "sp3_seq3"
 
     def test_repr_is_label(self):
         sp = Species(paralogs=[], label="sp0")
-        seq = Sequence("M", [0.0], [None], sp, 0)
+        seq = Sequence(row=0, host=sp, idx=0)
         assert repr(seq) == "sp0_seq1"
 
     def test_identity_based_equality(self):
         sp = Species(paralogs=[], label="sp0")
-        seq_a = Sequence("M", [0.0], [None], sp, 0)
-        seq_b = Sequence("M", [0.0], [None], sp, 0)
+        seq_a = Sequence(row=0, host=sp, idx=0)
+        seq_b = Sequence(row=0, host=sp, idx=0)
         assert seq_a != seq_b
         assert seq_a == seq_a
 
     def test_hashable_for_graph_nodes(self):
         sp = Species(paralogs=[], label="sp0")
-        seq = Sequence("M", [0.0], [None], sp, 0)
+        seq = Sequence(row=0, host=sp, idx=0)
         g = nx.DiGraph()
         g.add_node(seq)
         assert seq in g.nodes()
@@ -71,7 +71,7 @@ class TestOgLabel:
 class TestFindOrthologGroups:
     def _make_seq(self, label: str) -> Sequence:
         sp = Species(paralogs=[], label=label)
-        return Sequence("M", [0.0], [None], sp, 0)
+        return Sequence(row=0, host=sp, idx=0)
 
     def test_single_ortholog_all_leaves_in_group_0(self):
         root = self._make_seq("root")
@@ -91,13 +91,12 @@ class TestFindOrthologGroups:
         leaf_c = self._make_seq("c")
         leaf_d = self._make_seq("d")
         tree = nx.DiGraph()
-        tree.add_edge(root, dup)      # gene duplication edge
+        tree.add_edge(root, dup)
         tree.add_edge(root, leaf_a)
         tree.add_edge(root, leaf_b)
         tree.add_edge(dup, leaf_c)
         tree.add_edge(dup, leaf_d)
         groups = find_ortholog_groups(tree, [root, dup])
-        # dup is a second ortholog — its subtree should NOT appear in group 0
         assert leaf_c not in groups[0]
         assert leaf_d not in groups[0]
         assert set(groups[1]) == {leaf_c, leaf_d}

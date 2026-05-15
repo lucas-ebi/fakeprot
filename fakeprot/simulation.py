@@ -12,18 +12,20 @@ from fakeprot.config import SimulationConfig
 from fakeprot.evolution.mutation import (
     ROOT_AMINO_ACID,
     ROOT_PC_GROUP,
-    apply_gaps,
     make_mutant,
     mutation_rate_distribution,
 )
 from fakeprot.io.output import write_outputs
+from fakeprot.models.msa_store import MsaStore
 from fakeprot.models.sequence import Sequence
 from fakeprot.models.species import Species
 from fakeprot.substitution import (
     AA_FREQUENCIES,
-    AMINO_ACIDS,
+    AA_INDEX,
     PC_FREQUENCIES,
+    PC_INDEX,
     PC_MASKS,
+    PC_NONE,
     PHYSICOCHEMICAL_GROUPS,
 )
 
@@ -35,9 +37,10 @@ def run(config: SimulationConfig) -> None:
     sequence_tree: nx.DiGraph = nx.DiGraph()
 
     mutation_rates = mutation_rate_distribution(config.length, config)
-    root_seq_str, root_pc_groups = _generate_root_sequence(config.length, mutation_rates)
+    root_chars, root_rates, root_pc = _generate_root_sequence(config.length, mutation_rates)
 
-    root_sequence = Sequence(root_seq_str, mutation_rates, root_pc_groups, root_species, 0)
+    store = MsaStore(root_chars, root_rates, root_pc)
+    root_sequence = Sequence(row=0, host=root_species, idx=0)
     collection: list[Sequence] = [root_sequence]
     root_species.paralogs.append(root_sequence)
     species_tree.add_node(root_species)
@@ -56,10 +59,11 @@ def run(config: SimulationConfig) -> None:
         sp = current_species[chosen_idx]
 
         sequence_length = _do_gene_duplication(
-            sp, collection, sequence_tree, orthologs, current_species, config, sequence_length
+            store, sp, collection, sequence_tree,
+            orthologs, current_species, config, sequence_length,
         )
         sequence_length = _do_speciation(
-            sp, collection, sequence_tree, species_tree, config, sequence_length
+            store, sp, collection, sequence_tree, species_tree, config, sequence_length
         )
 
         current_species = [n for n in species_tree.nodes() if species_tree.out_degree(n) == 0]
@@ -72,6 +76,7 @@ def run(config: SimulationConfig) -> None:
 
     write_outputs(
         config,
+        store,
         collection,
         sequence_tree,
         species_tree,
@@ -90,33 +95,37 @@ def run(config: SimulationConfig) -> None:
 def _generate_root_sequence(
     length: int,
     mutation_rates: list[float],
-) -> tuple[str, list[str | None]]:
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
-    Build the ancestral root sequence.
+    Build the ancestral root sequence directly as numpy arrays.
 
     Position 0 is always Met (all natural proteins start with Met).
     Each subsequent site either acquires a physicochemical group (if its mutation
     rate is low) or is drawn freely from background frequencies.
     """
-    chars: list[str] = [ROOT_AMINO_ACID]
-    pc_groups: list[str | None] = [ROOT_PC_GROUP]
+    chars = np.empty(length, dtype=np.uint8)
+    rates = np.array(mutation_rates, dtype=np.float32)
+    pc    = np.full(length, PC_NONE, dtype=np.int8)
+
+    chars[0] = AA_INDEX[ROOT_AMINO_ACID]
+    pc[0]    = PC_INDEX[ROOT_PC_GROUP]
 
     for i in range(1, length):
         rate = mutation_rates[i]
         if np.random.random() < (1.0 - rate):
             sc = np.random.choice(PHYSICOCHEMICAL_GROUPS, p=PC_FREQUENCIES)
-            pc_groups.append(sc)
+            pc[i] = PC_INDEX[sc]
             mask = PC_MASKS[sc]
             p = AA_FREQUENCIES * mask
-            chars.append(AMINO_ACIDS[np.random.choice(20, p=p / p.sum())])
+            chars[i] = np.random.choice(20, p=p / p.sum())
         else:
-            pc_groups.append(None)
-            chars.append(AMINO_ACIDS[np.random.choice(20, p=AA_FREQUENCIES)])
+            chars[i] = np.random.choice(20, p=AA_FREQUENCIES)
 
-    return "".join(chars), pc_groups
+    return chars, rates, pc
 
 
 def _do_speciation(
+    store: MsaStore,
     parent: Species,
     collection: list[Sequence],
     sequence_tree: nx.DiGraph,
@@ -134,14 +143,18 @@ def _do_speciation(
     daughter_b = Species(paralogs=[], label=f"sp{n_nodes + 1}")
 
     for paralog_idx, paralog in enumerate(parent.paralogs):
-        child_a, gaps = make_mutant(paralog, daughter_a, paralog_idx, config)
-        sequence_length += apply_gaps(collection, gaps)
+        child_a, n = store.commit_child(
+            *make_mutant(store, paralog, config), daughter_a, paralog_idx
+        )
+        sequence_length += n
         collection.append(child_a)
         daughter_a.paralogs.append(child_a)
         sequence_tree.add_edge(paralog, child_a)
 
-        child_b, gaps = make_mutant(paralog, daughter_b, paralog_idx, config)
-        sequence_length += apply_gaps(collection, gaps)
+        child_b, n = store.commit_child(
+            *make_mutant(store, paralog, config), daughter_b, paralog_idx
+        )
+        sequence_length += n
         collection.append(child_b)
         daughter_b.paralogs.append(child_b)
         sequence_tree.add_edge(paralog, child_b)
@@ -153,6 +166,7 @@ def _do_speciation(
 
 
 def _do_gene_duplication(
+    store: MsaStore,
     species: Species,
     collection: list[Sequence],
     sequence_tree: nx.DiGraph,
@@ -180,8 +194,10 @@ def _do_gene_duplication(
     source = species.paralogs[source_idx]
     new_idx = len(species.paralogs)
 
-    duplicate, gaps = make_mutant(source, species, new_idx, config, duplication=True)
-    sequence_length += apply_gaps(collection, gaps)
+    duplicate, n = store.commit_child(
+        *make_mutant(store, source, config, duplication=True), species, new_idx
+    )
+    sequence_length += n
     collection.append(duplicate)
     species.paralogs.append(duplicate)
     orthologs.append(duplicate)

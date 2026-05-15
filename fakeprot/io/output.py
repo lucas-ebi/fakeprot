@@ -8,7 +8,6 @@ import json
 from datetime import datetime, timezone
 
 import networkx as nx
-import numpy as np
 from Bio import AlignIO, Phylo
 from Bio.Align import MultipleSeqAlignment
 from Bio.Phylo.BaseTree import Tree
@@ -25,8 +24,10 @@ from fakeprot.evolution.tree import (
     find_ortholog_groups,
     og_label,
 )
+from fakeprot.models.msa_store import MsaStore, decode_chars
 from fakeprot.models.sequence import Sequence
 from fakeprot.models.species import Species
+from fakeprot.substitution import AMINO_ACIDS, CHAR_GAP, PHYSICOCHEMICAL_GROUPS
 
 # fakeprot version — keep in sync with pyproject.toml
 _VERSION = "0.2.0"
@@ -34,6 +35,7 @@ _VERSION = "0.2.0"
 
 def write_outputs(
     config: SimulationConfig,
+    store: MsaStore,
     collection: list[Sequence],
     sequence_tree: nx.DiGraph,
     species_tree: nx.DiGraph,
@@ -43,23 +45,25 @@ def write_outputs(
     sequence_length: int,
 ) -> None:
     """Write all output files produced by a simulation run."""
-    leaves = [n for n in sequence_tree.nodes() if sequence_tree.out_degree(n) == 0]
     ortholog_groups = find_ortholog_groups(sequence_tree, orthologs)
 
-    _write_all_sequences(config, collection)
-    _write_current_sequences(config, sequence_tree, root_sequence)
-    _write_gene_tree(config, sequence_tree, root_sequence, sequence_length)
+    _write_all_sequences(config, store, collection)
+    _write_current_sequences(config, store, sequence_tree, root_sequence)
+    _write_gene_tree(config, store, sequence_tree, root_sequence, sequence_length)
     _write_species_cladogram(config, species_tree, root_species)
     _write_ortholog_groups_csv(config, ortholog_groups, orthologs)
     if config.n_orthologs > 1:
-        _write_ortholog_alignments(config, ortholog_groups)
-    _write_pc_groups_csv(config, ortholog_groups, orthologs, sequence_length)
+        _write_ortholog_alignments(config, store, ortholog_groups)
+    _write_pc_groups_csv(config, store, ortholog_groups, orthologs, sequence_length)
     _write_run_info(config)
 
 
-def _write_all_sequences(config: SimulationConfig, collection: list[Sequence]) -> None:
+def _write_all_sequences(
+    config: SimulationConfig, store: MsaStore, collection: list[Sequence]
+) -> None:
     alignment = MultipleSeqAlignment(
-        [SeqRecord(Seq(seq.sequence), id=str(seq), description="") for seq in collection]
+        [SeqRecord(Seq(decode_chars(store.chars[seq.row])), id=str(seq), description="")
+         for seq in collection]
     )
     path = f"{config.out}_all_sequences.{config.msa_format}"
     with open(path, "w") as fh:
@@ -68,10 +72,11 @@ def _write_all_sequences(config: SimulationConfig, collection: list[Sequence]) -
 
 def _write_current_sequences(
     config: SimulationConfig,
+    store: MsaStore,
     sequence_tree: nx.DiGraph,
     root_sequence: Sequence,
 ) -> None:
-    records = build_msa(sequence_tree, root_sequence)
+    records = build_msa(sequence_tree, root_sequence, store)
     alignment = MultipleSeqAlignment(records)
     path = f"{config.out}_current_sequences.{config.msa_format}"
     with open(path, "w") as fh:
@@ -80,11 +85,12 @@ def _write_current_sequences(
 
 def _write_gene_tree(
     config: SimulationConfig,
+    store: MsaStore,
     sequence_tree: nx.DiGraph,
     root_sequence: Sequence,
     sequence_length: int,
 ) -> None:
-    root_clade = build_gene_tree(sequence_tree, root_sequence, sequence_length)
+    root_clade = build_gene_tree(sequence_tree, root_sequence, sequence_length, store)
     tree = Tree(root=root_clade, rooted=True)
     Phylo.write(tree, f"{config.out}_gene_tree.{config.tree_format}", config.tree_format)
 
@@ -118,11 +124,13 @@ def _write_ortholog_groups_csv(
 
 def _write_ortholog_alignments(
     config: SimulationConfig,
+    store: MsaStore,
     ortholog_groups: dict[int, list[Sequence]],
 ) -> None:
     for i, members in ortholog_groups.items():
         alignment = MultipleSeqAlignment(
-            [SeqRecord(Seq(seq.sequence), id=str(seq), description="") for seq in members]
+            [SeqRecord(Seq(decode_chars(store.chars[seq.row])), id=str(seq), description="")
+             for seq in members]
         )
         path = f"{config.out}_OG_{og_label(i)}.{config.msa_format}"
         with open(path, "w") as fh:
@@ -131,6 +139,7 @@ def _write_ortholog_alignments(
 
 def _write_pc_groups_csv(
     config: SimulationConfig,
+    store: MsaStore,
     ortholog_groups: dict[int, list[Sequence]],
     orthologs: list[Sequence],
     sequence_length: int,
@@ -139,24 +148,30 @@ def _write_pc_groups_csv(
     for i in range(len(orthologs)):
         columns[f"OG {og_label(i)}"] = []
 
+    og_row_indices = [
+        [seq.row for seq in ortholog_groups[j]] for j in range(len(orthologs))
+    ]
+
     for col in range(sequence_length):
         for j, ancestor in enumerate(orthologs):
-            msa = np.array([list(seq.sequence) for seq in ortholog_groups[j]])
-            column_residues = msa[:, col]
+            col_chars = store.chars[og_row_indices[j], col]
             freq: dict[str, float] = {}
-            for aa in column_residues:
-                if aa != "-":
+            for c in col_chars:
+                if c < CHAR_GAP:
+                    aa = AMINO_ACIDS[int(c)]
                     freq[aa] = freq.get(aa, 0) + 1
+            pc_val = store.pc[ancestor.row, col]
+            pc_name = PHYSICOCHEMICAL_GROUPS[int(pc_val)] if pc_val >= 0 else None
             if freq:
-                total = len(msa)
+                total = len(og_row_indices[j])
                 freq = {k: v / total for k, v in freq.items()}
                 freq_str = " ".join(
                     f"{seq3(aa)}:{pct * 100:.2f}%"
                     for aa, pct in sorted(freq.items(), key=lambda x: x[1], reverse=True)
                 )
-                entry = f"{ancestor.pc_groups[col]} ({freq_str})"
+                entry = f"{pc_name} ({freq_str})"
             else:
-                entry = ancestor.pc_groups[col]
+                entry = pc_name
             columns[f"OG {og_label(j)}"].append(entry)
 
     DataFrame(columns).to_csv(f"{config.out}_physicochemical_groups.csv", index=False)
