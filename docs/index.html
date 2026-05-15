@@ -625,7 +625,7 @@ let pyodide;
     setStatus('Initialising Pyodide…');
     pyodide = await loadPyodide();
     setStatus('Installing packages…');
-    await pyodide.loadPackage(['numpy','pandas','micropip']);
+    await pyodide.loadPackage(['numpy','scipy','pandas','micropip']);
     await pyodide.runPythonAsync(`
 import micropip
 await micropip.install(["networkx","biopython"])
