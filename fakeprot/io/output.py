@@ -21,6 +21,7 @@ from fakeprot.evolution.tree import (
     build_gene_tree,
     build_msa,
     build_species_tree,
+    collect_leaf_sequences,
     find_ortholog_groups,
     og_label,
 )
@@ -61,11 +62,14 @@ def write_outputs(
 def _write_all_sequences(
     config: SimulationConfig, store: MsaStore, collection: list[Sequence]
 ) -> None:
+    path = f"{config.out}_all_sequences.{config.msa_format}"
+    if config.msa_format == "fasta":
+        _write_fasta(path, store, collection)
+        return
     alignment = MultipleSeqAlignment(
         [SeqRecord(Seq(decode_chars(store.chars[seq.row])), id=str(seq), description="")
          for seq in collection]
     )
-    path = f"{config.out}_all_sequences.{config.msa_format}"
     with open(path, "w") as fh:
         AlignIO.write(alignment, fh, config.msa_format)
 
@@ -76,9 +80,12 @@ def _write_current_sequences(
     sequence_tree: nx.DiGraph,
     root_sequence: Sequence,
 ) -> None:
+    path = f"{config.out}_current_sequences.{config.msa_format}"
+    if config.msa_format == "fasta":
+        _write_fasta(path, store, collect_leaf_sequences(sequence_tree, root_sequence))
+        return
     records = build_msa(sequence_tree, root_sequence, store)
     alignment = MultipleSeqAlignment(records)
-    path = f"{config.out}_current_sequences.{config.msa_format}"
     with open(path, "w") as fh:
         AlignIO.write(alignment, fh, config.msa_format)
 
@@ -128,13 +135,24 @@ def _write_ortholog_alignments(
     ortholog_groups: dict[int, list[Sequence]],
 ) -> None:
     for i, members in ortholog_groups.items():
+        path = f"{config.out}_OG_{og_label(i)}.{config.msa_format}"
+        if config.msa_format == "fasta":
+            _write_fasta(path, store, members)
+            continue
         alignment = MultipleSeqAlignment(
             [SeqRecord(Seq(decode_chars(store.chars[seq.row])), id=str(seq), description="")
              for seq in members]
         )
-        path = f"{config.out}_OG_{og_label(i)}.{config.msa_format}"
         with open(path, "w") as fh:
             AlignIO.write(alignment, fh, config.msa_format)
+
+
+def _write_fasta(path: str, store: MsaStore, sequences: list[Sequence]) -> None:
+    with open(path, "w") as fh:
+        for seq in sequences:
+            fh.write(f">{seq}\n")
+            fh.write(decode_chars(store.chars[seq.row]))
+            fh.write("\n")
 
 
 def _write_pc_groups_csv(

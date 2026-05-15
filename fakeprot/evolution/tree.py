@@ -19,17 +19,23 @@ from fakeprot.models.species import Species
 
 def build_msa(graph: nx.DiGraph, node: Sequence, store: MsaStore) -> list[SeqRecord]:
     """Collect leaf SeqRecord objects in tree traversal order."""
-    if graph.out_degree(node) == 0:
-        return []
-    records: list[SeqRecord] = []
-    for child in graph.successors(node):
+    return [
+        SeqRecord(Seq(decode_chars(store.chars[leaf.row])), id=str(leaf), description="")
+        for leaf in collect_leaf_sequences(graph, node)
+    ]
+
+
+def collect_leaf_sequences(graph: nx.DiGraph, node: Sequence) -> list[Sequence]:
+    """Collect leaf Sequence objects in tree traversal order."""
+    leaves: list[Sequence] = []
+    stack = list(reversed(list(graph.successors(node))))
+    while stack:
+        child = stack.pop()
         if graph.out_degree(child) == 0:
-            records.append(
-                SeqRecord(Seq(decode_chars(store.chars[child.row])), id=str(child), description="")
-            )
+            leaves.append(child)
         else:
-            records.extend(build_msa(graph, child, store))
-    return records
+            stack.extend(reversed(list(graph.successors(child))))
+    return leaves
 
 
 def get_branch_length(

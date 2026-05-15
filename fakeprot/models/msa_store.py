@@ -21,6 +21,9 @@ if TYPE_CHECKING:
     from fakeprot.models.species import Species
 
 
+_CHAR_BYTES = np.frombuffer(("".join(AMINO_ACIDS) + "-").encode("ascii"), dtype="S1")
+
+
 class MsaStore:
     """
     Three (n_sequences × length) arrays holding all sequence data.
@@ -154,7 +157,7 @@ class MsaStore:
 
 def decode_chars(chars: np.ndarray) -> str:
     """Convert a uint8 row to an amino acid / gap string."""
-    return "".join(AMINO_ACIDS[int(c)] if c < CHAR_GAP else "-" for c in chars)
+    return _CHAR_BYTES[chars].tobytes().decode("ascii")
 
 
 def decode_pc(pc_row: np.ndarray) -> list[str | None]:

@@ -8,23 +8,29 @@ import numpy as np
 from scipy.stats import gamma
 
 from fakeprot.config import SimulationConfig
-from fakeprot.models.msa_store import MsaStore, decode_pc, encode_row
+from fakeprot.models.msa_store import MsaStore, decode_chars, decode_pc, encode_row
 from fakeprot.models.sequence import Sequence
 from fakeprot.substitution import (
-    AA_FREQUENCIES,
+    AA_FREQUENCY_CDF,
     AA_INDEX,
     AMINO_ACIDS,
-    CHAR_GAP,
+    PC_AA_CDFS,
     PC_FREQUENCIES,
-    PC_MASKS,
     PC_SUBS_MATRIX,
+    PC_WAG_CDFS,
+    PC_WAG_TOTALS,
     PHYSICOCHEMICAL_GROUPS,
     PHYSICOCHEMICAL_SETS,
-    WAG_MATRIX,
+    WAG_CDFS,
 )
 
 ROOT_AMINO_ACID = "M"
 ROOT_PC_GROUP = "With sulfur"  # Met belongs to the sulfur group
+
+
+def _sample_from_cdf(cdf: np.ndarray) -> int:
+    """Sample an index from a cumulative distribution."""
+    return int(np.searchsorted(cdf, np.random.random(), side="right"))
 
 
 def wave_shuffle(values: list[float]) -> list[float]:
@@ -137,7 +143,7 @@ def _prepare_evolution_state(
     chars_row = store.chars[parent.row]
     rates     = store.rates[parent.row].tolist()
     stereo    = decode_pc(store.pc[parent.row])
-    residues  = [AMINO_ACIDS[int(c)] if c < CHAR_GAP else "-" for c in chars_row]
+    residues  = list(decode_chars(chars_row))
 
     if not duplication:
         return residues, rates, stereo
@@ -163,13 +169,11 @@ def _prepare_evolution_state(
                 new_sc = np.random.choice(keys, p=vals / vals.sum())
             new_stereo.append(new_sc)
             if residues[i] not in PHYSICOCHEMICAL_SETS[new_sc]:
-                mask = PC_MASKS[new_sc]
                 if residues[i] == "-":
-                    p = AA_FREQUENCIES * mask
+                    cdf = PC_AA_CDFS[new_sc]
                 else:
-                    p = WAG_MATRIX[AA_INDEX[residues[i]]] * mask
-                p = p / p.sum()
-                residues[i] = AMINO_ACIDS[np.random.choice(20, p=p)]
+                    cdf = PC_WAG_CDFS[new_sc][AA_INDEX[residues[i]]]
+                residues[i] = AMINO_ACIDS[_sample_from_cdf(cdf)]
         else:
             new_stereo.append(None)
 
@@ -178,20 +182,16 @@ def _prepare_evolution_state(
 
 def _sample_aa_unconstrained(rate: float, aa_idx: int) -> str:
     """Draw a new amino acid using WAG probabilities with no physicochemical group constraint."""
-    p = WAG_MATRIX[aa_idx] * rate
-    p[aa_idx] = 1.0 - rate
-    return AMINO_ACIDS[np.random.choice(20, p=p / p.sum())]
+    if np.random.random() < (1.0 - rate):
+        return AMINO_ACIDS[aa_idx]
+    return AMINO_ACIDS[_sample_from_cdf(WAG_CDFS[aa_idx])]
 
 
 def _sample_aa_constrained(rate: float, aa_idx: int, group: str) -> str:
     """Draw a new amino acid restricted to a physicochemical group by WAG probabilities."""
-    p = WAG_MATRIX[aa_idx] * PC_MASKS[group]
-    p[aa_idx] = 0.0
-    total = p.sum()
-    if total > 0.0:
-        p *= rate / total
-    p[aa_idx] = 1.0 - rate
-    return AMINO_ACIDS[np.random.choice(20, p=p / p.sum())]
+    if np.random.random() < (1.0 - rate) or PC_WAG_TOTALS[group][aa_idx] == 0.0:
+        return AMINO_ACIDS[aa_idx]
+    return AMINO_ACIDS[_sample_from_cdf(PC_WAG_CDFS[group][aa_idx])]
 
 
 def _apply_mutations_and_indels(
@@ -211,93 +211,52 @@ def _apply_mutations_and_indels(
     new_stereo: list[str | None] = []
     gaps: list[int] = []
     i = 0
+    n_residues = len(residues)
+    p_gap = config.p_gap
+    random = np.random.random
 
-    while i < len(residues):
+    while i < n_residues:
         if residues[i] == "-":
-            i, new_seq, new_rates, new_stereo = _handle_gap_region(
-                i, residues, rates, stereo, new_seq, new_rates, new_stereo, config
-            )
-        else:
-            i, new_seq, new_rates, new_stereo, gaps = _handle_residue(
-                i, residues, rates, stereo, new_seq, new_rates, new_stereo, gaps, config
-            )
+            start = i
+            end = n_residues
+            while i < end:
+                if residues[i] != "-":
+                    end = i
+                i += 1
+            i = start
 
-    return "".join(new_seq), new_rates, new_stereo, gaps
-
-
-def _handle_gap_region(
-    i: int,
-    residues: list[str],
-    rates: list[float],
-    stereo: list[str | None],
-    new_seq: list[str],
-    new_rates: list[float],
-    new_stereo: list[str | None],
-    config: SimulationConfig,
-) -> tuple[int, list[str], list[float], list[str | None]]:
-    """
-    Process a contiguous run of gap characters.
-
-    Each position has a geometrically decreasing probability of being filled.
-    Once one gap remains, all subsequent positions in the run stay as gaps.
-    """
-    start = i
-    end = len(residues)
-    while i < end:
-        if residues[i] != "-":
-            end = i
-        i += 1
-    i = start
-
-    j = 0
-    done = False
-    while i < end:
-        if done:
-            new_seq.append("-")
-        else:
-            p_fill = config.p_gap * (2.0 ** (-float(j)))
-            if np.random.random() < p_fill:
-                if stereo[i] is None:
-                    aa = AMINO_ACIDS[np.random.choice(20, p=AA_FREQUENCIES)]
+            j = 0
+            done = False
+            while i < end:
+                if done:
+                    new_seq.append("-")
                 else:
-                    mask = PC_MASKS[stereo[i]]
-                    p = AA_FREQUENCIES * mask
-                    aa = AMINO_ACIDS[np.random.choice(20, p=p / p.sum())]
-                new_seq.append(aa)
-            else:
-                new_seq.append("-")
-                done = True
-        new_rates.append(rates[i])
-        new_stereo.append(stereo[i])
-        i += 1
-        j += 1
+                    p_fill = p_gap * (2.0 ** (-float(j)))
+                    if random() < p_fill:
+                        if stereo[i] is None:
+                            aa = AMINO_ACIDS[_sample_from_cdf(AA_FREQUENCY_CDF)]
+                        else:
+                            aa = AMINO_ACIDS[_sample_from_cdf(PC_AA_CDFS[stereo[i]])]
+                        new_seq.append(aa)
+                    else:
+                        new_seq.append("-")
+                        done = True
+                new_rates.append(rates[i])
+                new_stereo.append(stereo[i])
+                i += 1
+                j += 1
+            continue
 
-    return i, new_seq, new_rates, new_stereo
+        rate = rates[i]
+        p_delete = p_gap * rate
 
+        if random() < p_delete:
+            new_seq.append("-")
+            new_rates.append(rate)
+            new_stereo.append(stereo[i])
+            i += 1
+            continue
 
-def _handle_residue(
-    i: int,
-    residues: list[str],
-    rates: list[float],
-    stereo: list[str | None],
-    new_seq: list[str],
-    new_rates: list[float],
-    new_stereo: list[str | None],
-    gaps: list[int],
-    config: SimulationConfig,
-) -> tuple[int, list[str], list[float], list[str | None], list[int]]:
-    """
-    Process a single non-gap residue: possibly delete it, substitute it,
-    then possibly insert one or more new residues immediately after it.
-    """
-    rate = rates[i]
-    p_delete = config.p_gap * rate
-
-    if np.random.random() < p_delete:
-        new_seq.append("-")
-        new_rates.append(rate)
-        new_stereo.append(stereo[i])
-    else:
         aa_idx = AA_INDEX[residues[i]]
         if stereo[i] is None:
             new_aa = _sample_aa_unconstrained(rate, aa_idx)
@@ -310,14 +269,14 @@ def _handle_residue(
         j = 0
         done = False
         while not done:
-            p_insert = rate * config.p_gap * (2.0 ** (-float(j)))
-            if np.random.random() < p_insert:
-                inserted_aa = AMINO_ACIDS[np.random.choice(20, p=AA_FREQUENCIES)]
+            p_insert = rate * p_gap * (2.0 ** (-float(j)))
+            if random() < p_insert:
+                inserted_aa = AMINO_ACIDS[_sample_from_cdf(AA_FREQUENCY_CDF)]
                 new_seq.append(inserted_aa)
                 new_rates.append(1.0)
                 new_stereo.append(None)
                 insertion = False
-                if i < len(residues) - 1:
+                if i < n_residues - 1:
                     if residues[i + 1] == "-":
                         i += 1
                     else:
@@ -330,5 +289,6 @@ def _handle_residue(
                 done = True
             j += 1
 
-    i += 1
-    return i, new_seq, new_rates, new_stereo, gaps
+        i += 1
+
+    return "".join(new_seq), new_rates, new_stereo, gaps

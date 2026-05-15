@@ -20,11 +20,11 @@ from fakeprot.models.msa_store import MsaStore
 from fakeprot.models.sequence import Sequence
 from fakeprot.models.species import Species
 from fakeprot.substitution import (
-    AA_FREQUENCIES,
+    AA_FREQUENCY_CDF,
     AA_INDEX,
+    PC_AA_CDFS,
     PC_FREQUENCIES,
     PC_INDEX,
-    PC_MASKS,
     PC_NONE,
     PHYSICOCHEMICAL_GROUPS,
 )
@@ -49,25 +49,27 @@ def run(config: SimulationConfig) -> None:
     sequence_length = config.length
 
     current_species = list(species_tree.nodes())
-    leaves = [n for n in sequence_tree.nodes() if sequence_tree.out_degree(n) == 0]
+    leaf_count = 0
 
-    while len(leaves) < config.size:
+    while leaf_count < config.size:
         if len(current_species) == 1:
             chosen_idx = 0
         else:
             chosen_idx = np.random.randint(len(current_species))
         sp = current_species[chosen_idx]
 
-        sequence_length = _do_gene_duplication(
+        sequence_length, leaf_delta = _do_gene_duplication(
             store, sp, collection, sequence_tree,
             orthologs, current_species, config, sequence_length,
         )
-        sequence_length = _do_speciation(
+        leaf_count += leaf_delta
+        sequence_length, leaf_delta, daughter_a, daughter_b = _do_speciation(
             store, sp, collection, sequence_tree, species_tree, config, sequence_length
         )
+        leaf_count += leaf_delta
 
-        current_species = [n for n in species_tree.nodes() if species_tree.out_degree(n) == 0]
-        leaves = [n for n in sequence_tree.nodes() if sequence_tree.out_degree(n) == 0]
+        del current_species[chosen_idx]
+        current_species.extend([daughter_a, daughter_b])
 
     if len(orthologs) < config.n_orthologs:
         print(
@@ -115,13 +117,16 @@ def _generate_root_sequence(
         if np.random.random() < (1.0 - rate):
             sc = np.random.choice(PHYSICOCHEMICAL_GROUPS, p=PC_FREQUENCIES)
             pc[i] = PC_INDEX[sc]
-            mask = PC_MASKS[sc]
-            p = AA_FREQUENCIES * mask
-            chars[i] = np.random.choice(20, p=p / p.sum())
+            chars[i] = _sample_from_cdf(PC_AA_CDFS[sc])
         else:
-            chars[i] = np.random.choice(20, p=AA_FREQUENCIES)
+            chars[i] = _sample_from_cdf(AA_FREQUENCY_CDF)
 
     return chars, rates, pc
+
+
+def _sample_from_cdf(cdf: np.ndarray) -> int:
+    """Sample an index from a cumulative distribution."""
+    return int(np.searchsorted(cdf, np.random.random(), side="right"))
 
 
 def _do_speciation(
@@ -132,17 +137,22 @@ def _do_speciation(
     species_tree: nx.DiGraph,
     config: SimulationConfig,
     sequence_length: int,
-) -> int:
+) -> tuple[int, int, Species, Species]:
     """
     Split one species into two daughter species, mutating each paralog independently.
 
-    Returns the updated sequence length (may grow if insertions occurred).
+    Returns the updated sequence length, sequence-leaf delta, and daughters.
     """
     n_nodes = len(species_tree.nodes())
     daughter_a = Species(paralogs=[], label=f"sp{n_nodes}")
     daughter_b = Species(paralogs=[], label=f"sp{n_nodes + 1}")
+    leaf_delta = 0
 
     for paralog_idx, paralog in enumerate(parent.paralogs):
+        parent_was_leaf = (
+            sequence_tree.has_node(paralog)
+            and sequence_tree.out_degree(paralog) == 0
+        )
         child_a, n = store.commit_child(
             *make_mutant(store, paralog, config), daughter_a, paralog_idx
         )
@@ -158,11 +168,12 @@ def _do_speciation(
         collection.append(child_b)
         daughter_b.paralogs.append(child_b)
         sequence_tree.add_edge(paralog, child_b)
+        leaf_delta += 2 - int(parent_was_leaf)
 
     species_tree.add_edge(parent, daughter_a)
     species_tree.add_edge(parent, daughter_b)
 
-    return sequence_length
+    return sequence_length, leaf_delta, daughter_a, daughter_b
 
 
 def _do_gene_duplication(
@@ -174,25 +185,30 @@ def _do_gene_duplication(
     current_species: list[Species],
     config: SimulationConfig,
     sequence_length: int,
-) -> int:
+) -> tuple[int, int]:
     """
     Possibly duplicate one paralog within a species to create a new ortholog group.
 
     The probability of duplication increases as the target number of orthologs
-    has not yet been reached. Returns the updated sequence length.
+    has not yet been reached. Returns the updated sequence length and
+    sequence-leaf delta.
     """
     if config.n_orthologs <= 1 or len(orthologs) >= config.n_orthologs:
-        return sequence_length
+        return sequence_length, 0
 
     p = 2.0 ** (-float(config.n_orthologs - len(orthologs)) / float(len(current_species)))
     if np.random.random() >= p:
-        return sequence_length
+        return sequence_length, 0
 
     source_idx = (
         0 if len(current_species) == 1 else np.random.randint(len(species.paralogs))
     )
     source = species.paralogs[source_idx]
     new_idx = len(species.paralogs)
+    source_was_leaf = (
+        sequence_tree.has_node(source)
+        and sequence_tree.out_degree(source) == 0
+    )
 
     duplicate, n = store.commit_child(
         *make_mutant(store, source, config, duplication=True), species, new_idx
@@ -203,4 +219,4 @@ def _do_gene_duplication(
     orthologs.append(duplicate)
     sequence_tree.add_edge(source, duplicate)
 
-    return sequence_length
+    return sequence_length, 1 - int(source_was_leaf)

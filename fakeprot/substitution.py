@@ -20,6 +20,16 @@ _aa_freq_raw = np.array([
 ])
 AA_FREQUENCIES: np.ndarray = _aa_freq_raw / _aa_freq_raw.sum()
 
+
+def _cdf(probs: np.ndarray) -> np.ndarray:
+    """Build a numerically stable cumulative distribution."""
+    cdf = np.cumsum(probs, dtype=float)
+    cdf[-1] = 1.0
+    return cdf
+
+
+AA_FREQUENCY_CDF: np.ndarray = _cdf(AA_FREQUENCIES)
+
 # Physicochemical groups used to bias conservative amino acid substitutions
 PHYSICOCHEMICAL_SETS: dict[str, list[str]] = {
     "Amide":                ["N", "Q"],
@@ -144,6 +154,7 @@ for _i, _from in enumerate(AMINO_ACIDS):
     for _j, _to in enumerate(AMINO_ACIDS):
         if _from != _to:
             WAG_MATRIX[_i, _j] = _WAG_RAW[_from].get(_to, 0.0)
+WAG_CDFS: np.ndarray = np.apply_along_axis(_cdf, 1, WAG_MATRIX)
 
 # Mean substitution probability between physicochemical groups, normalized per source group
 _pc_subs_raw: dict[str, dict[str, float]] = {}
@@ -167,3 +178,19 @@ PC_SUBS_MATRIX: dict[str, dict[str, float]] = {
 PC_INDEX: dict[str, int] = {g: i for i, g in enumerate(PHYSICOCHEMICAL_GROUPS)}
 CHAR_GAP: int = 20   # uint8 sentinel for a gap column
 PC_NONE: int = -1    # int8 sentinel for no physicochemical group
+
+PC_AA_CDFS: dict[str, np.ndarray] = {
+    group: _cdf(AA_FREQUENCIES * mask / (AA_FREQUENCIES * mask).sum())
+    for group, mask in PC_MASKS.items()
+}
+
+PC_WAG_CDFS: dict[str, np.ndarray] = {}
+PC_WAG_TOTALS: dict[str, np.ndarray] = {}
+for _group, _mask in PC_MASKS.items():
+    _masked = WAG_MATRIX * _mask
+    _totals = _masked.sum(axis=1)
+    _normalised = np.zeros_like(_masked)
+    _nonzero = _totals > 0.0
+    _normalised[_nonzero] = _masked[_nonzero] / _totals[_nonzero, np.newaxis]
+    PC_WAG_CDFS[_group] = np.apply_along_axis(_cdf, 1, _normalised)
+    PC_WAG_TOTALS[_group] = _totals
