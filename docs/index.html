@@ -233,23 +233,74 @@
       vertical-align: middle;
     }
     .output-table tr:hover td { background: var(--blue-light); }
-    .output-table .file-name {
+    .file-name {
       font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
       font-size: 0.8125rem;
     }
-    .output-table .file-type {
+    .file-type {
       font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
-      font-size: 0.75rem;
-      color: var(--muted);
+      font-size: 0.75rem; color: var(--muted); white-space: nowrap;
+    }
+    .file-desc { color: var(--muted); }
+    .dl-link { color: var(--blue); text-decoration: none; font-weight: 600; }
+    .dl-link:hover { color: var(--blue-dark); text-decoration: underline; }
+
+    /* ── View button ─────────────────────────────────────────────────── */
+    .view-btn {
+      background: none; border: none; color: var(--blue);
+      font-size: 0.8125rem; font-weight: 600; cursor: pointer;
+      font-family: inherit; padding: 0;
+    }
+    .view-btn:hover { color: var(--blue-dark); text-decoration: underline; }
+    .view-btn.active { color: var(--green-dark); }
+
+    /* ── Visualization panel ─────────────────────────────────────────── */
+    #viz-panel { display: none; margin-top: 1rem; }
+    #viz-header {
+      display: flex; align-items: center;
+      justify-content: space-between; margin-bottom: 0.75rem;
+    }
+    #viz-header .section-label { margin-bottom: 0; }
+    #viz-close {
+      background: none; border: none; cursor: pointer;
+      color: var(--muted); font-size: 1.25rem; line-height: 1; padding: 0;
+    }
+    #viz-close:hover { color: var(--text); }
+
+    /* MSA */
+    .msa-legend {
+      display: flex; flex-wrap: wrap; gap: 0.2rem 0.875rem;
+      margin-bottom: 0.625rem; font-size: 0.6875rem; color: var(--muted);
+    }
+    .leg { display: flex; align-items: center; gap: 0.25rem; }
+    .leg-sw { width: 10px; height: 10px; border-radius: 1px; flex-shrink: 0; }
+    .msa-wrap { overflow: auto; border: 1px solid var(--border); }
+
+    /* Tree */
+    .tree-wrap { overflow: auto; max-height: 520px; border: 1px solid var(--border); background: #fff; }
+    .tree-wrap svg { display: block; }
+
+    /* CSV */
+    .csv-wrap { overflow: auto; max-height: 440px; }
+    .csv-table {
+      border-collapse: collapse; font-size: 0.75rem;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
       white-space: nowrap;
     }
-    .output-table .file-desc { color: var(--muted); }
-    .dl-link {
-      color: var(--blue);
-      text-decoration: none;
-      font-weight: 600;
+    .csv-table th {
+      background: var(--surface); font-weight: 700;
+      padding: 0.25rem 0.625rem; border: 1px solid var(--border);
+      position: sticky; top: 0;
     }
-    .dl-link:hover { color: var(--blue-dark); text-decoration: underline; }
+    .csv-table td { padding: 0.2rem 0.625rem; border: 1px solid var(--border); }
+    .csv-table tr:nth-child(even) td { background: #fafafa; }
+
+    /* JSON */
+    .json-view {
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      font-size: 0.8125rem; line-height: 1.5; background: var(--surface);
+      padding: 1rem; overflow: auto; max-height: 440px; white-space: pre;
+    }
 
     /* ── Footer ──────────────────────────────────────────────────────── */
     footer {
@@ -383,7 +434,6 @@
     </div>
   </section>
 
-  <!-- Results -->
   <div id="output-section">
     <section>
       <div class="section-label">Results</div>
@@ -395,11 +445,22 @@
               <th>File</th>
               <th>Type</th>
               <th>Description</th>
+              <th>View</th>
               <th>Download</th>
             </tr>
           </thead>
           <tbody id="output-tbody"></tbody>
         </table>
+      </div>
+    </section>
+
+    <section id="viz-panel">
+      <div class="panel">
+        <div id="viz-header">
+          <div class="section-label" id="viz-title"></div>
+          <button id="viz-close" onclick="closeViz()" title="Close">×</button>
+        </div>
+        <div id="viz-content"></div>
       </div>
     </section>
   </div>
@@ -419,17 +480,44 @@
 </main>
 
 <script>
+// ── ClustalX-inspired amino acid colour scheme ─────────────────────────────
+const AA_COLORS = {
+  'A': '#80a0f0', 'V': '#80a0f0', 'I': '#80a0f0', 'L': '#80a0f0',
+  'M': '#80a0f0', 'F': '#80a0f0', 'W': '#80a0f0',   // hydrophobic
+  'K': '#f01505', 'R': '#f01505',                    // positive
+  'D': '#c048c0', 'E': '#c048c0',                    // negative
+  'S': '#15c015', 'T': '#15c015',
+  'N': '#15c015', 'Q': '#15c015',                    // polar
+  'H': '#15a4a4', 'Y': '#15a4a4',                    // aromatic
+  'C': '#f08080',                                    // cysteine
+  'G': '#f09048',                                    // glycine
+  'P': '#c0c000',                                    // proline
+  '-': '#d8d8d8',                                    // gap
+};
+
+const MSA_LEGEND = [
+  { label: 'Hydrophobic (A,V,I,L,M,F,W)', color: '#80a0f0' },
+  { label: 'Positive (K,R)',               color: '#f01505' },
+  { label: 'Negative (D,E)',               color: '#c048c0' },
+  { label: 'Polar (S,T,N,Q)',              color: '#15c015' },
+  { label: 'Aromatic (H,Y)',               color: '#15a4a4' },
+  { label: 'Cysteine',                     color: '#f08080' },
+  { label: 'Glycine',                      color: '#f09048' },
+  { label: 'Proline',                      color: '#c0c000' },
+  { label: 'Gap',                          color: '#d8d8d8' },
+];
+
 // ── File metadata ──────────────────────────────────────────────────────────
 function fileMeta(name) {
-  if (name.includes('all_sequences'))          return { type: 'MSA',  desc: 'All sequences including ancestral nodes' };
-  if (name.includes('current_sequences'))      return { type: 'MSA',  desc: 'Extant (leaf) sequences only' };
-  if (name.includes('gene_tree'))              return { type: 'TREE', desc: 'Gene phylogeny with branch lengths' };
-  if (name.includes('species_cladogram'))      return { type: 'TREE', desc: 'Species tree (topology only)' };
-  if (name.includes('OG_'))                    return { type: 'MSA',  desc: 'Ortholog group alignment' };
-  if (name.includes('ortholog_groups'))        return { type: 'CSV',  desc: 'Sequence to ortholog group mapping' };
-  if (name.includes('physicochemical_groups')) return { type: 'CSV',  desc: 'Per-column AA frequencies and physicochemical group' };
-  if (name.includes('run_info'))               return { type: 'JSON', desc: 'Run parameters and timestamp' };
-  return { type: '—', desc: '' };
+  if (name.includes('all_sequences'))          return { type: 'MSA',  view: 'msa',  desc: 'All sequences including ancestral nodes' };
+  if (name.includes('current_sequences'))      return { type: 'MSA',  view: 'msa',  desc: 'Extant (leaf) sequences only' };
+  if (name.includes('gene_tree'))              return { type: 'TREE', view: 'tree', desc: 'Gene phylogeny with branch lengths' };
+  if (name.includes('species_cladogram'))      return { type: 'TREE', view: 'tree', desc: 'Species tree (topology only)' };
+  if (name.includes('OG_'))                    return { type: 'MSA',  view: 'msa',  desc: 'Ortholog group alignment' };
+  if (name.includes('ortholog_groups'))        return { type: 'CSV',  view: 'csv',  desc: 'Sequence to ortholog group mapping' };
+  if (name.includes('physicochemical_groups')) return { type: 'CSV',  view: 'csv',  desc: 'Per-column AA frequencies and physicochemical group' };
+  if (name.includes('run_info'))               return { type: 'JSON', view: 'json', desc: 'Run parameters and timestamp' };
+  return { type: '—', view: null, desc: '' };
 }
 
 // ── Status helpers ─────────────────────────────────────────────────────────
@@ -447,17 +535,14 @@ async function loadFakeprot(pyodide) {
     'evolution/__init__.py', 'evolution/mutation.py', 'evolution/tree.py',
     'io/__init__.py', 'io/output.py',
   ];
-
   for (const dir of ['fakeprot', 'fakeprot/models', 'fakeprot/evolution', 'fakeprot/io', 'output']) {
     try { pyodide.FS.mkdir('/' + dir); } catch (_) {}
   }
-
   await Promise.all(FILES.map(async file => {
     const res = await fetch(BASE + file);
     if (!res.ok) throw new Error(`Could not fetch fakeprot/${file} (${res.status})`);
     pyodide.FS.writeFile('/fakeprot/' + file, await res.text());
   }));
-
   pyodide.runPython(`import sys\nif "/" not in sys.path: sys.path.insert(0, "/")`);
 }
 
@@ -475,19 +560,16 @@ let pyodide;
 import micropip
 await micropip.install(["networkx", "biopython"])
 `);
-
     setStatus('Loading FakeProt source…');
     await loadFakeprot(pyodide);
 
     setStatus('Ready', 'ready');
     document.getElementById('run-btn').disabled = false;
     document.getElementById('btn-label').textContent = 'Run simulation';
-
     document.getElementById('sim-form').addEventListener('submit', async e => {
       e.preventDefault();
       await runSimulation();
     });
-
   } catch (err) {
     setStatus('Initialisation failed: ' + err.message, 'error');
     console.error(err);
@@ -495,6 +577,9 @@ await micropip.install(["networkx", "biopython"])
 })();
 
 // ── Run simulation ─────────────────────────────────────────────────────────
+const fileContents = new Map();
+let activeViewBtn  = null;
+
 async function runSimulation() {
   const btn = document.getElementById('run-btn');
   btn.disabled = true;
@@ -502,6 +587,8 @@ async function runSimulation() {
   document.getElementById('btn-label').textContent = 'Running…';
   setStatus('Running simulation…');
   document.getElementById('output-section').style.display = 'none';
+  closeViz();
+  fileContents.clear();
 
   try {
     pyodide.FS.readdir('/output')
@@ -518,22 +605,18 @@ async function runSimulation() {
   const seed_raw    = document.getElementById('seed').value.trim();
   const msa_format  = document.getElementById('msa_format').value;
   const tree_format = document.getElementById('tree_format').value;
-
   const p_gap = p_gap_raw ? parseFloat(p_gap_raw) : 'None';
   const seed  = seed_raw  ? parseInt(seed_raw)    : 'None';
 
   try {
     await pyodide.runPythonAsync(`
 import sys, io as _io
-
 _cap = _io.StringIO()
 _real_stdout = sys.stdout
 sys.stdout = _cap
-
 try:
     from fakeprot.config import SimulationConfig
     from fakeprot.simulation import run
-
     _cfg = SimulationConfig(
         size=${size},
         length=${length},
@@ -549,7 +632,6 @@ try:
     run(_cfg)
 finally:
     sys.stdout = _real_stdout
-
 _warnings = _cap.getvalue().strip()
 `);
 
@@ -565,7 +647,6 @@ _warnings = _cap.getvalue().strip()
 
     const tbody = document.getElementById('output-tbody');
     tbody.innerHTML = '';
-
     const files = pyodide.FS.readdir('/output').filter(f => f !== '.' && f !== '..');
     const order = ['all_sequences', 'current_sequences', 'OG_', 'gene_tree',
                    'species_cladogram', 'ortholog_groups', 'physicochemical_groups', 'run_info'];
@@ -577,14 +658,21 @@ _warnings = _cap.getvalue().strip()
 
     for (const filename of files) {
       const data = pyodide.FS.readFile('/output/' + filename);
+      const text = new TextDecoder().decode(data);
+      fileContents.set(filename, text);
       const url  = URL.createObjectURL(new Blob([data], { type: 'text/plain' }));
       const meta = fileMeta(filename);
-
+      const canView = meta.view === 'msa' ||
+                      (meta.view === 'tree' && filename.endsWith('.newick')) ||
+                      meta.view === 'csv' || meta.view === 'json';
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td class="file-name">${filename}</td>
         <td class="file-type">${meta.type}</td>
         <td class="file-desc">${meta.desc}</td>
+        <td>${canView
+          ? `<button class="view-btn" onclick="showViz('${filename}',this)">View</button>`
+          : `<span style="color:var(--border)">—</span>`}</td>
         <td><a class="dl-link" href="${url}" download="${filename}">Download</a></td>`;
       tbody.appendChild(tr);
     }
@@ -598,10 +686,295 @@ _warnings = _cap.getvalue().strip()
     setStatus('Simulation error: ' + err.message, 'error');
     console.error(err);
   }
-
   btn.disabled = false;
   btn.classList.remove('running');
   document.getElementById('btn-label').textContent = 'Run simulation';
+}
+
+// ── Parsers ────────────────────────────────────────────────────────────────
+function parseFASTA(text) {
+  const seqs = [];
+  let cur = null;
+  for (const line of text.split('\n')) {
+    const t = line.trim();
+    if (!t) continue;
+    if (t.startsWith('>')) { cur = { id: t.slice(1).trim(), seq: '' }; seqs.push(cur); }
+    else if (cur) cur.seq += t;
+  }
+  return seqs;
+}
+
+function parseCSV(text) {
+  const lines = text.trim().split('\n').filter(l => l.trim());
+  if (!lines.length) return { headers: [], rows: [] };
+  const parse = l => {
+    const fields = [];
+    let f = '', inQ = false;
+    for (const c of l) {
+      if (c === '"') inQ = !inQ;
+      else if (c === ',' && !inQ) { fields.push(f); f = ''; }
+      else f += c;
+    }
+    fields.push(f);
+    return fields.map(v => v.trim());
+  };
+  return { headers: parse(lines[0]), rows: lines.slice(1).map(parse) };
+}
+
+function parseNewick(s) {
+  s = s.trim().replace(/;+$/, '').replace(/\s+/g, '');
+  let i = 0;
+  function node() {
+    const n = { name: '', length: 0, children: [] };
+    if (s[i] === '(') {
+      i++;
+      n.children.push(node());
+      while (s[i] === ',') { i++; n.children.push(node()); }
+      i++; // ')'
+    }
+    const ls = i;
+    while (i < s.length && ':,)'.indexOf(s[i]) === -1) i++;
+    n.name = s.slice(ls, i);
+    if (s[i] === ':') {
+      i++;
+      const ds = i;
+      while (i < s.length && ',)'.indexOf(s[i]) === -1) i++;
+      n.length = parseFloat(s.slice(ds, i)) || 0;
+    }
+    return n;
+  }
+  return node();
+}
+
+function layoutTree(root) {
+  let idx = 0;
+  function setY(n) {
+    if (!n.children.length) { n._y = idx++; return; }
+    n.children.forEach(setY);
+    n._y = (n.children[0]._y + n.children[n.children.length - 1]._y) / 2;
+  }
+  function setX(n, x) { n._x = x + n.length; n.children.forEach(c => setX(c, n._x)); }
+  setY(root);
+  root.length = 0;
+  setX(root, 0);
+  let maxX = 0;
+  function findMax(n) { if (n._x > maxX) maxX = n._x; n.children.forEach(findMax); }
+  findMax(root);
+  if (maxX < 1e-10) {
+    function setDepth(n, d) { n._x = d; n.children.forEach(c => setDepth(c, d + 1)); }
+    setDepth(root, 0);
+    maxX = 0; findMax(root);
+  }
+  return { nLeaves: idx, maxX: maxX || 1 };
+}
+
+// ── Renderers ─────────────────────────────────────────────────────────────
+function renderMSA(content, container) {
+  const seqs = parseFASTA(content);
+  if (!seqs.length) {
+    const p = document.createElement('p');
+    p.style.cssText = 'color:var(--muted);font-size:.875rem';
+    p.textContent = 'No sequences found. Visualisation requires FASTA format.';
+    container.appendChild(p);
+    return;
+  }
+
+  const legend = document.createElement('div');
+  legend.className = 'msa-legend';
+  MSA_LEGEND.forEach(({ label, color }) => {
+    const sp = document.createElement('span');
+    sp.className = 'leg';
+    sp.innerHTML = `<span class="leg-sw" style="background:${color}"></span>${label}`;
+    legend.appendChild(sp);
+  });
+  container.appendChild(legend);
+
+  const nSeq   = seqs.length;
+  const nCol   = Math.max(...seqs.map(s => s.seq.length));
+  const CELL_W = Math.max(4, Math.min(12, Math.floor(760 / nCol)));
+  const CELL_H = 16;
+  const LBL_W  = 130;
+
+  const canvas  = document.createElement('canvas');
+  canvas.width  = LBL_W + nCol * CELL_W;
+  canvas.height = nSeq * CELL_H;
+  canvas.style.display = 'block';
+  const ctx = canvas.getContext('2d');
+
+  seqs.forEach((s, row) => {
+    const y = row * CELL_H;
+    ctx.fillStyle    = '#1a1c1a';
+    ctx.textAlign    = 'right';
+    ctx.textBaseline = 'middle';
+    ctx.font         = '11px monospace';
+    ctx.fillText(s.id.slice(0, 18), LBL_W - 4, y + CELL_H / 2);
+    for (let col = 0; col < s.seq.length; col++) {
+      const aa = s.seq[col].toUpperCase();
+      const x  = LBL_W + col * CELL_W;
+      ctx.fillStyle = AA_COLORS[aa] || '#cccccc';
+      ctx.fillRect(x, y, CELL_W - 1, CELL_H - 1);
+      if (CELL_W >= 10) {
+        ctx.fillStyle    = '#fff';
+        ctx.textAlign    = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.font         = `bold ${Math.min(CELL_W - 2, 10)}px monospace`;
+        ctx.fillText(aa, x + CELL_W / 2, y + CELL_H / 2);
+      }
+    }
+  });
+
+  const wrap = document.createElement('div');
+  wrap.className = 'msa-wrap';
+  wrap.appendChild(canvas);
+  container.appendChild(wrap);
+}
+
+function renderTree(content, container) {
+  let root;
+  try { root = parseNewick(content); }
+  catch (e) { container.textContent = 'Parse error: ' + e.message; return; }
+  const { nLeaves, maxX } = layoutTree(root);
+  if (!nLeaves) { container.textContent = 'Empty tree.'; return; }
+
+  const ROW    = Math.max(14, Math.min(20, Math.floor(360 / nLeaves)));
+  const TREE_W = 360;
+  const LBL_W  = 130;
+  const PAD    = { t: 8, r: 10, b: 32, l: 16 };
+  const W = PAD.l + TREE_W + 6 + LBL_W + PAD.r;
+  const H = PAD.t + nLeaves * ROW + PAD.b;
+
+  const NS  = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('width', W);
+  svg.setAttribute('height', H);
+
+  const g = document.createElementNS(NS, 'g');
+  g.setAttribute('transform', `translate(${PAD.l},${PAD.t})`);
+  svg.appendChild(g);
+
+  const tx = x => x / maxX * TREE_W;
+  const ty = y => y * ROW + ROW / 2;
+
+  function seg(x1, y1, x2, y2) {
+    const el = document.createElementNS(NS, 'line');
+    el.setAttribute('x1', x1); el.setAttribute('y1', y1);
+    el.setAttribute('x2', x2); el.setAttribute('y2', y2);
+    el.setAttribute('stroke', '#595c56');
+    el.setAttribute('stroke-width', '1');
+    g.appendChild(el);
+  }
+
+  function draw(n) {
+    const nx = tx(n._x), ny = ty(n._y);
+    if (n.children.length) {
+      seg(nx, ty(n.children[0]._y), nx, ty(n.children[n.children.length - 1]._y));
+      n.children.forEach(c => { seg(nx, ty(c._y), tx(c._x), ty(c._y)); draw(c); });
+    } else {
+      const dot = document.createElementNS(NS, 'circle');
+      dot.setAttribute('cx', nx); dot.setAttribute('cy', ny);
+      dot.setAttribute('r', '2'); dot.setAttribute('fill', '#3b6fb6');
+      g.appendChild(dot);
+      const txt = document.createElementNS(NS, 'text');
+      txt.setAttribute('x', nx + 5);
+      txt.setAttribute('y', ny);
+      txt.setAttribute('font-size', ROW <= 14 ? '10' : '11');
+      txt.setAttribute('font-family', 'monospace');
+      txt.setAttribute('dominant-baseline', 'middle');
+      txt.setAttribute('fill', '#1a1c1a');
+      txt.textContent = n.name;
+      g.appendChild(txt);
+    }
+  }
+
+  draw(root);
+
+  // Scale bar
+  const barVal = Math.pow(10, Math.floor(Math.log10(maxX)));
+  const barPx  = barVal / maxX * TREE_W;
+  const barY   = nLeaves * ROW + 14;
+  seg(0, barY, barPx, barY);
+  seg(0, barY - 3, 0, barY + 3);
+  seg(barPx, barY - 3, barPx, barY + 3);
+  const st = document.createElementNS(NS, 'text');
+  st.setAttribute('x', barPx / 2); st.setAttribute('y', barY + 10);
+  st.setAttribute('font-size', '9'); st.setAttribute('font-family', 'sans-serif');
+  st.setAttribute('text-anchor', 'middle'); st.setAttribute('fill', '#595c56');
+  st.textContent = barVal < 0.01 ? barVal.toExponential(0) : barVal.toString();
+  g.appendChild(st);
+
+  const wrap = document.createElement('div');
+  wrap.className = 'tree-wrap';
+  wrap.appendChild(svg);
+  container.appendChild(wrap);
+}
+
+function renderCSV(content, container) {
+  const { headers, rows } = parseCSV(content);
+  const wrap  = document.createElement('div');
+  wrap.className = 'csv-wrap';
+  const table = document.createElement('table');
+  table.className = 'csv-table';
+  const thead = document.createElement('thead');
+  const hRow  = document.createElement('tr');
+  headers.forEach(h => {
+    const th = document.createElement('th');
+    th.textContent = h;
+    hRow.appendChild(th);
+  });
+  thead.appendChild(hRow);
+  table.appendChild(thead);
+  const tbody = document.createElement('tbody');
+  rows.forEach(row => {
+    const tr = document.createElement('tr');
+    row.forEach(cell => {
+      const td = document.createElement('td');
+      td.textContent = cell;
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  wrap.appendChild(table);
+  container.appendChild(wrap);
+}
+
+function renderJSON(content, container) {
+  const pre = document.createElement('pre');
+  pre.className = 'json-view';
+  try { pre.textContent = JSON.stringify(JSON.parse(content), null, 2); }
+  catch { pre.textContent = content; }
+  container.appendChild(pre);
+}
+
+// ── Visualization dispatch ─────────────────────────────────────────────────
+function showViz(filename, btn) {
+  const panel   = document.getElementById('viz-panel');
+  const content = document.getElementById('viz-content');
+  const title   = document.getElementById('viz-title');
+
+  if (activeViewBtn === btn && panel.style.display !== 'none') { closeViz(); return; }
+  if (activeViewBtn) activeViewBtn.classList.remove('active');
+  activeViewBtn = btn;
+  btn.classList.add('active');
+
+  content.innerHTML = '';
+  title.textContent = filename;
+
+  const text = fileContents.get(filename);
+  const meta = fileMeta(filename);
+  if      (meta.view === 'msa')  renderMSA(text, content);
+  else if (meta.view === 'tree') renderTree(text, content);
+  else if (meta.view === 'csv')  renderCSV(text, content);
+  else if (meta.view === 'json') renderJSON(text, content);
+
+  panel.style.display = 'block';
+  panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function closeViz() {
+  document.getElementById('viz-panel').style.display = 'none';
+  document.getElementById('viz-content').innerHTML = '';
+  if (activeViewBtn) { activeViewBtn.classList.remove('active'); activeViewBtn = null; }
 }
 </script>
 </body>
