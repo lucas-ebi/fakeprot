@@ -74,7 +74,6 @@ try:
         p_gap=${cfg.p_gap},
         n_orthologs=${cfg.n_orthologs},
         gamma_shape=${cfg.gamma_shape},
-        gamma_scale=${cfg.gamma_scale},
         seed=${cfg.seed},
         out="/output/result",
         msa_format="${cfg.msa_format}",

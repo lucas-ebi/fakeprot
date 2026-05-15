@@ -51,15 +51,8 @@ def main() -> None:
         "-a", "--shape",
         dest="gamma_shape",
         type=float,
-        default=2.0,
-        help="Shape parameter of the gamma distribution for site-rate variation (default: 2.0).",
-    )
-    parser.add_argument(
-        "-b", "--scale",
-        dest="gamma_scale",
-        type=float,
-        default=1.0,
-        help="Scale parameter of the gamma distribution for site-rate variation (default: 1.0).",
+        default=0.75,
+        help="Shape parameter of the gamma distribution for site-rate variation (default: 0.75).",
     )
     parser.add_argument(
         "-r", "--seed",
@@ -89,7 +82,6 @@ def main() -> None:
         p_gap=args.p_gap,
         n_orthologs=args.n_orthologs,
         gamma_shape=args.gamma_shape,
-        gamma_scale=args.gamma_scale,
         seed=args.seed,
         out=args.out,
         msa_format=args.msa_format,

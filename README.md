@@ -68,8 +68,7 @@ fakeprot SIZE LENGTH [options]
 | `-o`, `--out` | `fakeprot_out` | Prefix for all output files. |
 | `-g`, `--p-gap` | `1/SIZE` | Baseline gap/indel probability, denoted below by $p_g$. |
 | `-n`, `--n-orthologs` | `1` | Target number of ortholog-group anchors. |
-| `-a`, `--shape` | `2.0` | Shape parameter $\alpha$ for the gamma site-rate model. |
-| `-b`, `--scale` | `1.0` | Scale parameter $\beta$ for the gamma site-rate model. |
+| `-a`, `--shape` | `0.75` | Shape parameter $\alpha$ for the gamma site-rate model. Scale is fixed to $1/\alpha$ so that the mean rate equals 1. |
 | `-r`, `--seed` | `None` | Random seed for reproducible simulations. |
 | `-f`, `--msa-format` | `fasta` | Alignment format: `fasta`, `clustal`, `nexus`, `phylip`, or `stockholm`. |
 | `-t`, `--tree-format` | `newick` | Tree format: `newick`, `nexus`, `nexml`, `phyloxml`, or `cdao`. |
@@ -106,21 +105,26 @@ P(X=a \mid c) =
 
 Given root length $L$, FakeProt assigns a site-specific mutation probability
 $r_i$ to every alignment site. The first site is fixed at $r_1 = 0$
-to preserve the initial methionine. For the remaining $L - 1$ sites, the
-simulator evaluates the gamma density between the 1st and 99th percentiles:
+to preserve the initial methionine. For the remaining $L - 1$ sites, rates
+are drawn from a $\Gamma(\alpha,\,\beta)$ distribution with
+$\beta = 1/\alpha$ (so the mean rate equals 1, following the standard
+phylogenetic convention). Specifically, $L-1$ evenly spaced quantile values
+are taken between the 1st and 99th percentiles:
 
 ```math
 (x_1,\ldots,x_{L-1}) =
 \text{linspace}
 \left(
-F^{-1}_{\Gamma(\alpha,\beta)}(0.01),
-F^{-1}_{\Gamma(\alpha,\beta)}(0.99),
+F^{-1}_{\Gamma(\alpha,\,1/\alpha)}(0.01),\;
+F^{-1}_{\Gamma(\alpha,\,1/\alpha)}(0.99),\;
 L-1
 \right),
 ```
 
+and then normalised to $[0,1]$ by the 99th-percentile value $x_{L-1}$:
+
 ```math
-r_{j+1} = f_{\Gamma(\alpha,\beta)}(x_j),
+r_{j+1} = \frac{x_j}{x_{L-1}},
 \qquad j = 1,\ldots,L-1.
 ```
 

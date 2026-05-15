@@ -82,14 +82,14 @@ def mutation_rate_distribution(
         shape = 0.0
         while shape < 1.0:
             shape = np.random.normal(config.gamma_shape, 1.0)
-        scale = 0.0
-        while scale < 1.0:
-            scale = np.random.normal(config.gamma_scale, 1.0)
     else:
-        shape, scale = config.gamma_shape, config.gamma_scale
+        shape = config.gamma_shape
 
-    x = np.linspace(gamma.ppf(0.01, shape), gamma.ppf(0.99, shape), length - 1)
-    rates = gamma.pdf(x, shape, scale=scale).tolist()
+    scale = 1.0 / shape  # normalise mean to 1 (standard phylogenetic convention)
+    lo = gamma.ppf(0.01, shape, scale=scale)
+    hi = gamma.ppf(0.99, shape, scale=scale)
+    x = np.linspace(lo, hi, length - 1)
+    rates = np.clip(x / hi, 0.0, 1.0).tolist()
     return [0.0] + wave_shuffle(rates)
 
 

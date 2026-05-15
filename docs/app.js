@@ -151,7 +151,6 @@ async function runSimulation() {
   const length      = parseInt(document.getElementById('length').value);
   const n_orthologs = parseInt(document.getElementById('n_orthologs').value);
   const gamma_shape = parseFloat(document.getElementById('gamma_shape').value);
-  const gamma_scale = parseFloat(document.getElementById('gamma_scale').value);
   const p_gap_raw   = document.getElementById('p_gap').value.trim();
   const seed_raw    = document.getElementById('seed').value.trim();
   const msa_format  = document.getElementById('msa_format').value;
@@ -172,7 +171,7 @@ async function runSimulation() {
 
   try {
     const config = {
-      size, length, n_orthologs, gamma_shape, gamma_scale, msa_format, tree_format,
+      size, length, n_orthologs, gamma_shape, msa_format, tree_format,
       p_gap: p_gap_raw ? parseFloat(p_gap_raw) : 'None',
       seed:  seed_raw  ? parseInt(seed_raw)    : 'None',
     };
