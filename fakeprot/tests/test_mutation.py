@@ -82,6 +82,22 @@ class TestMutationRateDistribution:
 
 
 class TestMakeMutant:
+    def test_zero_rates_and_no_gaps_preserve_parent(
+        self, simple_species: Species
+    ):
+        residues = list("MARNDCQEGH")
+        chars, rates, pc = encode_row(residues, [0.0] * len(residues), [None] * len(residues))
+        store = MsaStore(chars, rates, pc)
+        parent = Sequence(row=0, host=simple_species, idx=0)
+        config = SimulationConfig(size=10, length=len(residues), p_gap=0.0, seed=3)
+
+        child_chars, child_rates, child_pc, gaps = make_mutant(store, parent, config)
+
+        assert gaps == []
+        assert decode_chars(child_chars) == "".join(residues)
+        assert child_rates.tolist() == pytest.approx(rates.tolist())
+        assert child_pc.tolist() == pc.tolist()
+
     def test_produces_valid_amino_acids(
         self, simple_store_and_seq: tuple[MsaStore, Sequence], config: SimulationConfig
     ):
@@ -107,6 +123,32 @@ class TestMakeMutant:
         _, _, _, gaps = make_mutant(store, parent, config)
         assert isinstance(gaps, list)
         assert all(isinstance(g, int) for g in gaps)
+
+    def test_existing_gaps_are_preserved_when_gap_probability_is_zero(
+        self, simple_species: Species
+    ):
+        chars, rates, pc = encode_row(list("MA--RN"), [0.2] * 6, [None] * 6)
+        store = MsaStore(chars, rates, pc)
+        parent = Sequence(row=0, host=simple_species, idx=0)
+        config = SimulationConfig(size=10, length=6, p_gap=0.0, seed=11)
+
+        child_chars, child_rates, child_pc, gaps = make_mutant(store, parent, config)
+
+        assert gaps == []
+        assert len(child_chars) == len(chars)
+        assert len(child_rates) == len(rates)
+        assert len(child_pc) == len(pc)
+        assert decode_chars(child_chars)[2:4] == "--"
+
+    def test_output_arrays_have_matching_lengths(
+        self, simple_store_and_seq: tuple[MsaStore, Sequence]
+    ):
+        store, parent = simple_store_and_seq
+        config = SimulationConfig(size=10, length=20, p_gap=0.25, seed=13)
+
+        child_chars, child_rates, child_pc, _ = make_mutant(store, parent, config)
+
+        assert len(child_chars) == len(child_rates) == len(child_pc)
 
     def test_duplication_mode(
         self, simple_store_and_seq: tuple[MsaStore, Sequence], config: SimulationConfig

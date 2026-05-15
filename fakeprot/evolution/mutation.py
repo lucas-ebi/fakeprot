@@ -14,8 +14,10 @@ from fakeprot.substitution import (
     AA_FREQUENCY_CDF,
     AA_INDEX,
     AMINO_ACIDS,
+    CHAR_GAP,
     PC_AA_CDFS,
     PC_FREQUENCIES,
+    PC_NONE,
     PC_SUBS_MATRIX,
     PC_WAG_CDFS,
     PC_WAG_TOTALS,
@@ -105,12 +107,22 @@ def make_mutant(
       2. row = store.add_row(chars, rates, pc)   — append child at that length
       3. child = Sequence(row, new_host, new_idx)
     """
-    residues, rates, stereo = _prepare_evolution_state(store, parent, config, duplication)
-    new_seq, new_rates, new_stereo, gaps = _apply_mutations_and_indels(
-        residues, rates, stereo, config
+    if duplication:
+        residues, rates, stereo = _prepare_evolution_state(
+            store, parent, config, duplication=True
+        )
+        chars, rates_arr, pc_arr = encode_row(residues, rates, stereo)
+    else:
+        chars = store.chars[parent.row]
+        rates_arr = store.rates[parent.row]
+        pc_arr = store.pc[parent.row]
+
+    return _apply_mutations_and_indels(
+        chars,
+        rates_arr,
+        pc_arr,
+        config,
     )
-    chars, rates_arr, pc_arr = encode_row(list(new_seq), new_rates, new_stereo)
-    return chars, rates_arr, pc_arr, gaps
 
 
 def apply_gaps(store: MsaStore, gaps: list[int]) -> int:
@@ -141,9 +153,9 @@ def _prepare_evolution_state(
     reflecting relaxed purifying selection on the new copy.
     """
     chars_row = store.chars[parent.row]
-    rates     = store.rates[parent.row].tolist()
-    stereo    = decode_pc(store.pc[parent.row])
-    residues  = list(decode_chars(chars_row))
+    rates = store.rates[parent.row].tolist()
+    stereo = decode_pc(store.pc[parent.row])
+    residues = list(decode_chars(chars_row))
 
     if not duplication:
         return residues, rates, stereo
@@ -180,115 +192,156 @@ def _prepare_evolution_state(
     return residues, current_rates, new_stereo
 
 
-def _sample_aa_unconstrained(rate: float, aa_idx: int) -> str:
-    """Draw a new amino acid using WAG probabilities with no physicochemical group constraint."""
-    if np.random.random() < (1.0 - rate):
-        return AMINO_ACIDS[aa_idx]
-    return AMINO_ACIDS[_sample_from_cdf(WAG_CDFS[aa_idx])]
+def _sample_from_cdf_rows(cdf_rows: np.ndarray) -> np.ndarray:
+    """Sample one amino-acid index from each CDF row."""
+    r = np.random.random(len(cdf_rows))
+    return (cdf_rows <= r[:, None]).sum(axis=1).clip(0, 19).astype(np.uint8)
 
 
-def _sample_aa_constrained(rate: float, aa_idx: int, group: str) -> str:
-    """Draw a new amino acid restricted to a physicochemical group by WAG probabilities."""
-    if np.random.random() < (1.0 - rate) or PC_WAG_TOTALS[group][aa_idx] == 0.0:
-        return AMINO_ACIDS[aa_idx]
-    return AMINO_ACIDS[_sample_from_cdf(PC_WAG_CDFS[group][aa_idx])]
+def _sample_gap_fill(pc_value: int) -> int:
+    """Sample a residue for an existing gap slot, respecting its PC constraint."""
+    if pc_value == PC_NONE:
+        return _sample_from_cdf(AA_FREQUENCY_CDF)
+    group = PHYSICOCHEMICAL_GROUPS[pc_value]
+    return _sample_from_cdf(PC_AA_CDFS[group])
+
+
+def _mutation_decisions(
+    chars: np.ndarray,
+    rates: np.ndarray,
+    p_gap: float,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Draw deletion and substitution masks for all non-gap sites."""
+    rates_f = rates.astype(np.float64, copy=False)
+    is_gap = chars == CHAR_GAP
+    active = ~is_gap
+
+    rand_del = np.random.random(len(chars))
+    rand_sub = np.random.random(len(chars))
+
+    deleted = active & (rand_del < rates_f * p_gap)
+    surviving = active & ~deleted
+    will_mutate = surviving & (rand_sub >= 1.0 - rates_f)
+    return is_gap, deleted, will_mutate
+
+
+def _apply_substitutions(
+    chars: np.ndarray,
+    pc: np.ndarray,
+    will_mutate: np.ndarray,
+) -> np.ndarray:
+    """Apply vectorised WAG substitutions to the selected non-gap sites."""
+    new_chars = chars.copy()
+
+    unconstrained = will_mutate & (pc == PC_NONE)
+    if unconstrained.any():
+        idx = np.where(unconstrained)[0]
+        new_chars[idx] = _sample_from_cdf_rows(WAG_CDFS[chars[idx]])
+
+    constrained = will_mutate & (pc >= 0)
+    if constrained.any():
+        constrained_idx = np.where(constrained)[0]
+        constrained_pc = pc[constrained_idx]
+        for group_id in np.unique(constrained_pc):
+            group_name = PHYSICOCHEMICAL_GROUPS[int(group_id)]
+            selected = constrained_idx[constrained_pc == group_id]
+            source_chars = chars[selected]
+            can_mutate = PC_WAG_TOTALS[group_name][source_chars] > 0.0
+            if can_mutate.any():
+                mutable = selected[can_mutate]
+                cdf_rows = PC_WAG_CDFS[group_name][source_chars[can_mutate]]
+                new_chars[mutable] = _sample_from_cdf_rows(cdf_rows)
+
+    return new_chars
+
+
+def _append_gap_run(
+    start: int,
+    end: int,
+    rates: np.ndarray,
+    pc: np.ndarray,
+    p_gap: float,
+    out_chars: list[int],
+    out_rates: list[float],
+    out_pc: list[int],
+) -> None:
+    """Append an existing gap run, possibly filling its first slots."""
+    done = False
+    for step, pos in enumerate(range(start, end)):
+        if done:
+            char = CHAR_GAP
+        elif np.random.random() < p_gap * (2.0 ** -step):
+            char = _sample_gap_fill(int(pc[pos]))
+        else:
+            char = CHAR_GAP
+            done = True
+        out_chars.append(int(char))
+        out_rates.append(float(rates[pos]))
+        out_pc.append(int(pc[pos]))
 
 
 def _apply_mutations_and_indels(
-    residues: list[str],
-    rates: list[float],
-    stereo: list[str | None],
+    chars: np.ndarray,
+    rates: np.ndarray,
+    pc: np.ndarray,
     config: SimulationConfig,
-) -> tuple[str, list[float], list[str | None], list[int]]:
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, list[int]]:
     """
-    Walk each site of the parent sequence and apply substitutions, deletions,
-    and insertions according to the WAG model and gap probability.
+    Apply substitutions, deletions, insertions, and gap filling to encoded rows.
 
-    Returns (new_sequence_str, new_rates, new_stereo, gap_positions).
+    Deletion and substitution decisions are vectorised in bulk. Output assembly
+    remains sequential because insertions can consume existing gap slots and
+    may add new alignment columns.
     """
-    new_seq: list[str] = []
-    new_rates: list[float] = []
-    new_stereo: list[str | None] = []
-    gaps: list[int] = []
-    i = 0
-    n_residues = len(residues)
+    n = len(chars)
     p_gap = config.p_gap
-    random = np.random.random
+    is_gap, deleted, will_mutate = _mutation_decisions(chars, rates, p_gap)
+    new_chars = _apply_substitutions(chars, pc, will_mutate)
 
-    while i < n_residues:
-        if residues[i] == "-":
-            start = i
-            end = n_residues
-            while i < end:
-                if residues[i] != "-":
-                    end = i
-                i += 1
-            i = start
+    out_chars: list[int] = []
+    out_rates: list[float] = []
+    out_pc: list[int] = []
+    gaps: list[int] = []
 
-            j = 0
-            done = False
-            while i < end:
-                if done:
-                    new_seq.append("-")
-                else:
-                    p_fill = p_gap * (2.0 ** (-float(j)))
-                    if random() < p_fill:
-                        if stereo[i] is None:
-                            aa = AMINO_ACIDS[_sample_from_cdf(AA_FREQUENCY_CDF)]
-                        else:
-                            aa = AMINO_ACIDS[_sample_from_cdf(PC_AA_CDFS[stereo[i]])]
-                        new_seq.append(aa)
-                    else:
-                        new_seq.append("-")
-                        done = True
-                new_rates.append(rates[i])
-                new_stereo.append(stereo[i])
-                i += 1
+    i = 0
+    while i < n:
+        if is_gap[i]:
+            # Locate end of gap run
+            j = i + 1
+            while j < n and chars[j] == CHAR_GAP:
                 j += 1
+            _append_gap_run(i, j, rates, pc, p_gap, out_chars, out_rates, out_pc)
+            i = j
             continue
 
-        rate = rates[i]
-        p_delete = p_gap * rate
-
-        if random() < p_delete:
-            new_seq.append("-")
-            new_rates.append(rate)
-            new_stereo.append(stereo[i])
+        if deleted[i]:
+            out_chars.append(CHAR_GAP)
+            out_rates.append(float(rates[i]))
+            out_pc.append(int(pc[i]))
             i += 1
             continue
 
-        aa_idx = AA_INDEX[residues[i]]
-        if stereo[i] is None:
-            new_aa = _sample_aa_unconstrained(rate, aa_idx)
-        else:
-            new_aa = _sample_aa_constrained(rate, aa_idx, stereo[i])
-        new_seq.append(new_aa)
-        new_rates.append(rate)
-        new_stereo.append(stereo[i])
+        out_chars.append(int(new_chars[i]))
+        out_rates.append(float(rates[i]))
+        out_pc.append(int(pc[i]))
 
-        j = 0
-        done = False
-        while not done:
-            p_insert = rate * p_gap * (2.0 ** (-float(j)))
-            if random() < p_insert:
-                inserted_aa = AMINO_ACIDS[_sample_from_cdf(AA_FREQUENCY_CDF)]
-                new_seq.append(inserted_aa)
-                new_rates.append(1.0)
-                new_stereo.append(None)
-                insertion = False
-                if i < n_residues - 1:
-                    if residues[i + 1] == "-":
-                        i += 1
-                    else:
-                        insertion = True
-                else:
-                    insertion = True
-                if insertion:
-                    gaps.append(i)
+        step = 0
+        rate_i = float(rates[i])
+        while np.random.random() < rate_i * p_gap * (2.0 ** -step):
+            out_chars.append(_sample_from_cdf(AA_FREQUENCY_CDF))
+            out_rates.append(1.0)
+            out_pc.append(PC_NONE)
+            if i + 1 < n and chars[i + 1] == CHAR_GAP:
+                i += 1
             else:
-                done = True
-            j += 1
+                gaps.append(i)
+            step += 1
 
         i += 1
 
-    return "".join(new_seq), new_rates, new_stereo, gaps
+    return (
+        np.array(out_chars, dtype=np.uint8),
+        np.array(out_rates, dtype=np.float32),
+        np.array(out_pc, dtype=np.int8),
+        gaps,
+    )

@@ -216,18 +216,54 @@ function renderTree(content, container) {
   svg.appendChild(g);
   const tx = x => x / maxX * TW;
   const ty = y => y * ROW + ROW / 2;
-  function seg(x1, y1, x2, y2) {
+  // Floating branch-length tooltip element (reused across all branches)
+  const tip = document.createElementNS(NS, 'g');
+  tip.setAttribute('pointer-events', 'none');
+  tip.style.display = 'none';
+  const tipRect = document.createElementNS(NS, 'rect');
+  tipRect.setAttribute('rx', '2'); tipRect.setAttribute('fill', '#1a1c1a');
+  tipRect.setAttribute('opacity', '0.78');
+  const tipText = document.createElementNS(NS, 'text');
+  tipText.setAttribute('font-size', '10'); tipText.setAttribute('font-family', 'monospace');
+  tipText.setAttribute('fill', '#fff'); tipText.setAttribute('dominant-baseline', 'middle');
+  tip.appendChild(tipRect); tip.appendChild(tipText);
+  g.appendChild(tip);
+
+  function seg(x1, y1, x2, y2, label) {
+    if (label) {
+      const hit = document.createElementNS(NS, 'line');
+      hit.setAttribute('x1', x1); hit.setAttribute('y1', y1);
+      hit.setAttribute('x2', x2); hit.setAttribute('y2', y2);
+      hit.setAttribute('stroke', 'transparent'); hit.setAttribute('stroke-width', '10');
+      hit.style.cursor = 'default';
+      hit.addEventListener('mouseenter', () => {
+        tipText.textContent = label;
+        const tw = label.length * 6.2 + 6;
+        tipRect.setAttribute('x', (x1 + x2) / 2 - tw / 2 - 2);
+        tipRect.setAttribute('y', y1 - 10);
+        tipRect.setAttribute('width', tw + 4); tipRect.setAttribute('height', 14);
+        tipText.setAttribute('x', (x1 + x2) / 2 - tw / 2 + 1);
+        tipText.setAttribute('y', y1 - 3);
+        tip.style.display = '';
+      });
+      hit.addEventListener('mouseleave', () => { tip.style.display = 'none'; });
+      g.appendChild(hit);
+    }
     const el = document.createElementNS(NS, 'line');
     el.setAttribute('x1', x1); el.setAttribute('y1', y1);
     el.setAttribute('x2', x2); el.setAttribute('y2', y2);
     el.setAttribute('stroke', '#595c56'); el.setAttribute('stroke-width', '1');
+    if (label) el.setAttribute('pointer-events', 'none');
     g.appendChild(el);
   }
   function draw(n) {
     const nx = tx(n._x), ny = ty(n._y);
     if (n.children.length) {
       seg(nx, ty(n.children[0]._y), nx, ty(n.children[n.children.length-1]._y));
-      n.children.forEach(c => { seg(nx, ty(c._y), tx(c._x), ty(c._y)); draw(c); });
+      n.children.forEach(c => {
+        seg(nx, ty(c._y), tx(c._x), ty(c._y), c.length > 0 ? c.length.toFixed(5) : null);
+        draw(c);
+      });
     } else {
       const dot = document.createElementNS(NS, 'circle');
       dot.setAttribute('cx', nx); dot.setAttribute('cy', ny);
