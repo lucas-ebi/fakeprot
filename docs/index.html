@@ -943,7 +943,7 @@ function layoutTree(root) {
 }
 
 function countNewickLeaves(text) {
-  const s = text.trim();
+  const s = text.trim().replace(/\s+/g, '');
   let leaves = 0;
   for (let i = 0; i < s.length; i++) {
     const prev = s[i - 1];
