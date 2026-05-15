@@ -4,6 +4,8 @@ Mutation, indel, and rate-distribution logic for sequence evolution.
 
 from __future__ import annotations
 
+from collections import Counter
+
 import numpy as np
 from scipy.stats import gamma
 
@@ -34,28 +36,27 @@ def wave_shuffle(values: list[float]) -> list[float]:
     value at each step. Weights are proportional to (1 - |current - candidate|),
     clamped to zero to guard against gamma PDF ranges that exceed 1.
     """
-    arr = np.asarray(values, dtype=float)
-    n = len(arr)
-    available = np.ones(n, dtype=bool)
+    n = len(values)
+    avail = np.asarray(values, dtype=float).copy()
     result = np.empty(n, dtype=float)
+    m = n
 
-    current_idx = np.random.randint(n)
-    result[0] = arr[current_idx]
-    available[current_idx] = False
+    start = np.random.randint(n)
+    result[0] = avail[start]
+    avail[start] = avail[m - 1]
+    m -= 1
 
     for step in range(1, n):
-        avail_idx = np.where(available)[0]
-        distances = np.abs(arr[avail_idx] - result[step - 1])
+        distances = np.abs(avail[:m] - result[step - 1])
         weights = np.maximum(0.0, 1.0 - distances)
         total = weights.sum()
         if total == 0.0:
-            weights = np.ones(len(avail_idx), dtype=float)
-            total = float(len(avail_idx))
-        weights /= total
-        chosen = np.random.choice(len(avail_idx), p=weights)
-        current_idx = avail_idx[chosen]
-        result[step] = arr[current_idx]
-        available[current_idx] = False
+            chosen = np.random.randint(m)
+        else:
+            chosen = np.random.choice(m, p=weights / total)
+        result[step] = avail[chosen]
+        avail[chosen] = avail[m - 1]
+        m -= 1
 
     return result.tolist()
 
@@ -110,14 +111,37 @@ def apply_gaps(collection: list[Sequence], gaps: list[int]) -> int:
     """
     Insert gap columns into every sequence to preserve alignment after insertions.
 
-    Processes positions in reverse order so earlier insertions don't shift
-    the indices of later ones. Returns the number of columns added.
+    Builds each updated sequence in a single pass (one allocation per sequence)
+    instead of one allocation per gap position. Returns the number of columns added.
     """
-    for pos in sorted(gaps, reverse=True):
-        for seq in collection:
-            seq.sequence = seq.sequence[: pos + 1] + "-" + seq.sequence[pos + 1 :]
-            seq.mutation_rates = seq.mutation_rates[: pos + 1] + [1.0] + seq.mutation_rates[pos + 1 :]
-            seq.pc_groups = seq.pc_groups[: pos + 1] + [None] + seq.pc_groups[pos + 1 :]
+    if not gaps:
+        return 0
+    gap_counts = Counter(gaps)
+    sorted_positions = sorted(gap_counts)
+    for seq in collection:
+        s = seq.sequence
+        r = seq.mutation_rates
+        p = seq.pc_groups
+        parts_s: list[str] = []
+        parts_r: list[float] = []
+        parts_p: list[str | None] = []
+        prev = 0
+        for g in sorted_positions:
+            end = g + 1
+            parts_s.append(s[prev:end])
+            parts_r += r[prev:end]
+            parts_p += p[prev:end]
+            count = gap_counts[g]
+            parts_s.append("-" * count)
+            parts_r += [1.0] * count
+            parts_p += [None] * count
+            prev = end
+        parts_s.append(s[prev:])
+        parts_r += r[prev:]
+        parts_p += p[prev:]
+        seq.sequence = "".join(parts_s)
+        seq.mutation_rates = parts_r
+        seq.pc_groups = parts_p
     return len(gaps)
 
 
@@ -153,7 +177,7 @@ def _prepare_evolution_state(
     for i in range(1, len(residues)):
         rate = current_rates[i]
         # With probability (1 - rate) the site acquires / retains a physicochemical class
-        if np.random.choice((True, False), p=(1.0 - rate, rate)):
+        if np.random.random() < (1.0 - rate):
             if parent.pc_groups[i] is None:
                 new_sc = np.random.choice(PHYSICOCHEMICAL_GROUPS, p=PC_FREQUENCIES)
             else:
@@ -187,12 +211,11 @@ def _sample_aa_unconstrained(rate: float, aa_idx: int) -> str:
 
 def _sample_aa_constrained(rate: float, aa_idx: int, group: str) -> str:
     """Draw a new amino acid restricted to a physicochemical group by WAG probabilities."""
-    mask = PC_MASKS[group].copy()
-    mask[aa_idx] = False  # diagonal handled separately
-    p = WAG_MATRIX[aa_idx] * mask
+    p = WAG_MATRIX[aa_idx] * PC_MASKS[group]
+    p[aa_idx] = 0.0
     total = p.sum()
     if total > 0.0:
-        p = p / total * rate
+        p *= rate / total
     p[aa_idx] = 1.0 - rate
     return AMINO_ACIDS[np.random.choice(20, p=p / p.sum())]
 
@@ -259,7 +282,7 @@ def _handle_gap_region(
             new_seq.append("-")
         else:
             p_fill = config.p_gap * (2.0 ** (-float(j)))
-            if np.random.choice((True, False), p=(p_fill, 1.0 - p_fill)):
+            if np.random.random() < p_fill:
                 if stereo[i] is None:
                     aa = AMINO_ACIDS[np.random.choice(20, p=AA_FREQUENCIES)]
                 else:
@@ -296,7 +319,7 @@ def _handle_residue(
     rate = rates[i]
     p_delete = config.p_gap * rate
 
-    if np.random.choice((True, False), p=(p_delete, 1.0 - p_delete)):
+    if np.random.random() < p_delete:
         new_seq.append("-")
         new_rates.append(rate)
         new_stereo.append(stereo[i])
@@ -315,7 +338,7 @@ def _handle_residue(
         done = False
         while not done:
             p_insert = rate * config.p_gap * (2.0 ** (-float(j)))
-            if np.random.choice((True, False), p=(p_insert, 1.0 - p_insert)):
+            if np.random.random() < p_insert:
                 inserted_aa = AMINO_ACIDS[np.random.choice(20, p=AA_FREQUENCIES)]
                 new_seq.append(inserted_aa)
                 new_rates.append(1.0)

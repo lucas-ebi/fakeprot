@@ -98,22 +98,22 @@ def _generate_root_sequence(
     Each subsequent site either acquires a physicochemical group (if its mutation
     rate is low) or is drawn freely from background frequencies.
     """
-    sequence = ROOT_AMINO_ACID
+    chars: list[str] = [ROOT_AMINO_ACID]
     pc_groups: list[str | None] = [ROOT_PC_GROUP]
 
     for i in range(1, length):
         rate = mutation_rates[i]
-        if np.random.choice((True, False), p=(1.0 - rate, rate)):
+        if np.random.random() < (1.0 - rate):
             sc = np.random.choice(PHYSICOCHEMICAL_GROUPS, p=PC_FREQUENCIES)
             pc_groups.append(sc)
             mask = PC_MASKS[sc]
             p = AA_FREQUENCIES * mask
-            sequence += AMINO_ACIDS[np.random.choice(20, p=p / p.sum())]
+            chars.append(AMINO_ACIDS[np.random.choice(20, p=p / p.sum())])
         else:
             pc_groups.append(None)
-            sequence += AMINO_ACIDS[np.random.choice(20, p=AA_FREQUENCIES)]
+            chars.append(AMINO_ACIDS[np.random.choice(20, p=AA_FREQUENCIES)])
 
-    return sequence, pc_groups
+    return "".join(chars), pc_groups
 
 
 def _do_speciation(
@@ -171,7 +171,7 @@ def _do_gene_duplication(
         return sequence_length
 
     p = 2.0 ** (-float(config.n_orthologs - len(orthologs)) / float(len(current_species)))
-    if not np.random.choice((True, False), p=(p, 1.0 - p)):
+    if np.random.random() >= p:
         return sequence_length
 
     source_idx = (
