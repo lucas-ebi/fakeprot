@@ -115,6 +115,11 @@ async function downloadFile(filename) {
   setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
+function ogLabelFromFilename(filename) {
+  const match = filename.match(/_OG_([^./]+)\./);
+  return match ? `OG ${match[1]}` : filename;
+}
+
 // ── Run simulation ─────────────────────────────────────────────────────────
 async function runSimulation() {
   const btn = document.getElementById('run-btn');
@@ -125,15 +130,17 @@ async function runSimulation() {
   textCache.clear();
   closePreview();
 
-  ['panel-current-msa','panel-gene-tree','panel-species-tree'].forEach(id => {
+  ['panel-current-msa','panel-current-logo','panel-gene-tree','panel-species-tree'].forEach(id => {
     const el = document.getElementById(id);
     el.innerHTML = '';
     el.classList.remove('visible');
   });
   document.getElementById('empty-sequences').style.display  = '';
+  document.getElementById('empty-logo').style.display       = '';
   document.getElementById('empty-gene-tree').style.display  = '';
   document.getElementById('empty-species-tree').style.display = '';
   document.getElementById('msg-sequences').textContent    = 'Execute a simulation to view the alignment';
+  document.getElementById('msg-logo').textContent         = 'Execute a simulation to view the sequence logo';
   document.getElementById('msg-gene-tree').textContent    = 'Execute a simulation to view the gene tree';
   document.getElementById('msg-species-tree').textContent = 'Execute a simulation to view the species tree';
   document.getElementById('files-content').style.display = 'none';
@@ -209,12 +216,24 @@ async function runSimulation() {
 
     const msaFile = files.find(f => f.includes('current_sequences'));
     if (msaFile) {
+      const text = await getFileText(msaFile);
       const el = document.getElementById('panel-current-msa');
+      const logoEl = document.getElementById('panel-current-logo');
       document.getElementById('empty-sequences').style.display = 'none';
+      document.getElementById('empty-logo').style.display = 'none';
       el.classList.add('visible');
-      renderMSA(await getFileText(msaFile), el);
+      logoEl.classList.add('visible');
+      renderMSA(text, el);
+      renderLogoSection('Current sequences', text, logoEl);
+
+      const ogLogoFiles = files.filter(f => f.includes('OG_') && f.endsWith('.fasta'));
+      for (const ogFile of ogLogoFiles) {
+        renderLogoSection(ogLabelFromFilename(ogFile), await getFileText(ogFile), logoEl);
+      }
+      setupLogoScrollSync(logoEl);
     } else {
       document.getElementById('msg-sequences').textContent = 'No alignment file was generated.';
+      document.getElementById('msg-logo').textContent = 'No alignment file was generated.';
     }
 
     const geneTreeFile = files.find(f => f.includes('gene_tree') && f.endsWith('.newick'));
@@ -264,12 +283,26 @@ async function showPreview(filename, btn) {
   content.innerHTML = '';
   const text = await getFileText(filename);
   const meta = fileMeta(filename);
-  if      (meta.view === 'msa')  renderMSA(text, content);
+  if      (meta.view === 'msa')  renderMSAPreview(text, content);
   else if (meta.view === 'tree') renderTree(text, content);
   else if (meta.view === 'csv')  renderCSV(text, content);
   else if (meta.view === 'json') renderJSON(text, content);
   preview.style.display = 'block';
   preview.scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+
+function setupLogoScrollSync(container) {
+  const wraps = Array.from(container.querySelectorAll('.logo-wrap'));
+  if (wraps.length < 2) return;
+  let syncing = false;
+  wraps.forEach(wrap => {
+    wrap.addEventListener('scroll', () => {
+      if (syncing) return;
+      syncing = true;
+      wraps.forEach(w => { if (w !== wrap) w.scrollLeft = wrap.scrollLeft; });
+      syncing = false;
+    });
+  });
 }
 
 function closePreview() {

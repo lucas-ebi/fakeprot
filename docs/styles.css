@@ -219,6 +219,21 @@ header nav a:hover { color: #fff; }
 #preview-content .msa-wrap { max-height: 340px; border: 1px solid var(--border); }
 #preview-content .msa-legend { padding: 0.375rem 0; border-bottom: none; }
 
+/* ── Sequence logo ───────────────────────────────────────────────── */
+.logo-wrap { overflow: auto; border: 1px solid var(--border); background: #fff; max-height: 260px; }
+.logo-wrap canvas { display: block; }
+.panel-content .logo-wrap { flex: 1; max-height: none; border: none; }
+.logo-section { flex-shrink: 0; border-bottom: 1px solid var(--border); }
+.logo-title {
+  padding: 0.45rem 1rem 0.25rem;
+  font-size: 0.6875rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.07em; color: var(--muted);
+}
+.logo-section .logo-wrap { border: none; max-height: 260px; }
+.preview-logo-panel { margin-bottom: 0.75rem; }
+#preview-content .logo-wrap { max-height: 220px; border: 1px solid var(--border); }
+#panel-current-logo.panel-content.visible { display: block; overflow: auto; }
+
 /* ── Tree ────────────────────────────────────────────────────────── */
 .tree-wrap { overflow: auto; background: #fff; border: 1px solid var(--border); max-height: 520px; }
 .tree-wrap svg { display: block; }

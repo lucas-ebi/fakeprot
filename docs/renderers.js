@@ -22,6 +22,8 @@ const MSA_LEGEND = [
 const MAX_MSA_PREVIEW_SEQS = 500;
 const MAX_MSA_PREVIEW_COLS = 500;
 const MAX_TREE_PREVIEW_LEAVES = 1000;
+const LOGO_AAS = 'ARNDCQEGHILKMFPSTWYV'.split('');
+const LOGO_MAX_BITS = Math.log2(LOGO_AAS.length);
 
 // ── Parsers ────────────────────────────────────────────────────────────────
 function parseFASTA(text) {
@@ -111,14 +113,14 @@ function countNewickLeaves(text) {
 }
 
 // ── Renderers ──────────────────────────────────────────────────────────────
-function renderMSA(content, container) {
+function prepareMSAPreview(content, container, showLimitWarning = true) {
   const allSeqs = parseFASTA(content);
   if (!allSeqs.length) {
     const p = document.createElement('p');
     p.style.cssText = 'color:var(--muted);font-size:.875rem;padding:1rem';
     p.textContent = 'No sequences found. Visualisation requires FASTA format.';
     container.appendChild(p);
-    return;
+    return null;
   }
 
   let totalCols = 0;
@@ -131,12 +133,24 @@ function renderMSA(content, container) {
     seq: seq.seq.slice(0, MAX_MSA_PREVIEW_COLS),
   }));
   const isLimited = allSeqs.length > seqs.length || totalCols > MAX_MSA_PREVIEW_COLS;
-  if (isLimited) {
+  if (isLimited && showLimitWarning) {
     addPreviewWarning(
       container,
       `Preview limited to first ${seqs.length.toLocaleString()} of ${allSeqs.length.toLocaleString()} sequences and first ${Math.min(totalCols, MAX_MSA_PREVIEW_COLS).toLocaleString()} of ${totalCols.toLocaleString()} columns. Download the full files for complete data.`
     );
   }
+
+  let nCol = 0;
+  for (const seq of seqs) {
+    if (seq.seq.length > nCol) nCol = seq.seq.length;
+  }
+  return {seqs, nCol};
+}
+
+function renderMSA(content, container, showLimitWarning = true) {
+  const preview = prepareMSAPreview(content, container, showLimitWarning);
+  if (!preview) return;
+  const {seqs, nCol} = preview;
 
   const legend = document.createElement('div');
   legend.className = 'msa-legend';
@@ -149,10 +163,6 @@ function renderMSA(content, container) {
   container.appendChild(legend);
 
   const nSeq = seqs.length;
-  let nCol = 0;
-  for (const seq of seqs) {
-    if (seq.seq.length > nCol) nCol = seq.seq.length;
-  }
   const CW = 14, CH = 18, LW = 150;
   const canvas = document.createElement('canvas');
   canvas.width  = LW + nCol * CW;
@@ -178,6 +188,137 @@ function renderMSA(content, container) {
   wrap.className = 'msa-wrap';
   wrap.appendChild(canvas);
   container.appendChild(wrap);
+}
+
+function renderLogo(content, container, showLimitWarning = true) {
+  const preview = prepareMSAPreview(content, container, showLimitWarning);
+  if (!preview) return;
+  const {seqs, nCol} = preview;
+
+  const CW = 20, AXIS_W = 42, TOP = 12, LOGO_H = 150, GAP_H = 18, BOTTOM = 28;
+  const W = AXIS_W + nCol * CW + 12;
+  const H = TOP + LOGO_H + GAP_H + BOTTOM;
+  const canvas = document.createElement('canvas');
+  canvas.width = W;
+  canvas.height = H;
+  canvas.style.display = 'block';
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, W, H);
+
+  const x0 = AXIS_W;
+  const yBase = TOP + LOGO_H;
+  ctx.strokeStyle = '#d0d0ce';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(x0 - 6, TOP);
+  ctx.lineTo(x0 - 6, yBase);
+  ctx.lineTo(W - 8, yBase);
+  ctx.stroke();
+
+  ctx.fillStyle = '#595c56';
+  ctx.font = '10px sans-serif';
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'middle';
+  [0, 2, 4].forEach(bits => {
+    const y = yBase - (bits / LOGO_MAX_BITS) * LOGO_H;
+    ctx.strokeStyle = '#ededed';
+    ctx.beginPath();
+    ctx.moveTo(x0 - 4, y);
+    ctx.lineTo(W - 8, y);
+    ctx.stroke();
+    ctx.fillText(bits.toString(), x0 - 10, y);
+  });
+  ctx.save();
+  ctx.translate(10, TOP + LOGO_H / 2);
+  ctx.rotate(-Math.PI / 2);
+  ctx.textAlign = 'center';
+  ctx.fillText('bits', 0, 0);
+  ctx.restore();
+
+  for (let col = 0; col < nCol; col++) {
+    const counts = Object.fromEntries(LOGO_AAS.map(aa => [aa, 0]));
+    let nonGap = 0;
+    let gap = 0;
+    for (const seq of seqs) {
+      const aa = (seq.seq[col] || '-').toUpperCase();
+      if (aa === '-') {
+        gap++;
+      } else if (counts[aa] !== undefined) {
+        counts[aa]++;
+        nonGap++;
+      }
+    }
+
+    const x = x0 + col * CW;
+    if (nonGap > 0) {
+      let entropy = 0;
+      const items = [];
+      for (const aa of LOGO_AAS) {
+        const p = counts[aa] / nonGap;
+        if (p <= 0) continue;
+        entropy -= p * Math.log2(p);
+        items.push({aa, p});
+      }
+      const info = Math.max(0, LOGO_MAX_BITS - entropy);
+      let y = yBase;
+      items
+        .map(item => ({...item, h: item.p * info / LOGO_MAX_BITS * LOGO_H}))
+        .filter(item => item.h >= 1)
+        .sort((a, b) => a.h - b.h)
+        .forEach(item => {
+          y -= item.h;
+          ctx.save();
+          ctx.translate(x + CW / 2, y + item.h);
+          ctx.scale(1, item.h / 16);
+          ctx.fillStyle = AA_COLORS[item.aa] || '#999';
+          ctx.font = 'bold 18px Arial, Helvetica, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'bottom';
+          ctx.fillText(item.aa, 0, 0);
+          ctx.restore();
+        });
+    }
+
+    const total = nonGap + gap;
+    const gapFrac = total ? gap / total : 0;
+    if (gapFrac > 0) {
+      ctx.fillStyle = '#d8d8d8';
+      ctx.fillRect(x + 2, yBase + 4 + (1 - gapFrac) * GAP_H, CW - 4, gapFrac * GAP_H);
+    }
+
+    if ((col + 1) % 10 === 0 || col === 0) {
+      ctx.fillStyle = '#595c56';
+      ctx.font = '9px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillText(String(col + 1), x + CW / 2, yBase + GAP_H + 8);
+    }
+  }
+
+  const wrap = document.createElement('div');
+  wrap.className = 'logo-wrap';
+  wrap.appendChild(canvas);
+  container.appendChild(wrap);
+}
+
+function renderLogoSection(title, content, container, showLimitWarning = true) {
+  const section = document.createElement('section');
+  section.className = 'logo-section';
+  const heading = document.createElement('div');
+  heading.className = 'logo-title';
+  heading.textContent = title;
+  section.appendChild(heading);
+  renderLogo(content, section, showLimitWarning);
+  container.appendChild(section);
+}
+
+function renderMSAPreview(content, container) {
+  const logoPanel = document.createElement('div');
+  logoPanel.className = 'preview-logo-panel';
+  renderLogo(content, logoPanel);
+  container.appendChild(logoPanel);
+  renderMSA(content, container, false);
 }
 
 function renderTree(content, container) {
