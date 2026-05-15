@@ -111,7 +111,7 @@ simulator evaluates the gamma density between the 1st and 99th percentiles:
 
 ```math
 (x_1,\ldots,x_{L-1}) =
-\operatorname{linspace}
+\text{linspace}
 \left(
 F^{-1}_{\Gamma(\alpha,\beta)}(0.01),
 F^{-1}_{\Gamma(\alpha,\beta)}(0.99),
@@ -153,7 +153,7 @@ P(c_i = \varnothing) = r_i.
 ```
 
 If constrained, the class is drawn from
-$\operatorname{Categorical}(\omega)$ and the amino acid is drawn from the
+$\text{Categorical}(\omega)$ and the amino acid is drawn from the
 class-conditional WAG background distribution. If unconstrained, the amino acid
 is drawn directly from the WAG background frequencies $\pi$.
 
