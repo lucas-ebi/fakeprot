@@ -59,7 +59,7 @@ def write_outputs(
 
 def _write_all_sequences(config: SimulationConfig, collection: list[Sequence]) -> None:
     alignment = MultipleSeqAlignment(
-        [SeqRecord(Seq(seq.sequence), id=str(seq)) for seq in collection]
+        [SeqRecord(Seq(seq.sequence), id=str(seq), description="") for seq in collection]
     )
     path = f"{config.out}_all_sequences.{config.msa_format}"
     with open(path, "w") as fh:
@@ -122,7 +122,7 @@ def _write_ortholog_alignments(
 ) -> None:
     for i, members in ortholog_groups.items():
         alignment = MultipleSeqAlignment(
-            [SeqRecord(Seq(seq.sequence), id=str(seq)) for seq in members]
+            [SeqRecord(Seq(seq.sequence), id=str(seq), description="") for seq in members]
         )
         path = f"{config.out}_OG_{og_label(i)}.{config.msa_format}"
         with open(path, "w") as fh:

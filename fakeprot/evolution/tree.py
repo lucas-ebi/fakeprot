@@ -23,7 +23,7 @@ def build_msa(graph: nx.DiGraph, node: Sequence) -> list[SeqRecord]:
     records: list[SeqRecord] = []
     for child in graph.successors(node):
         if graph.out_degree(child) == 0:
-            records.append(SeqRecord(Seq(child.sequence), id=str(child)))
+            records.append(SeqRecord(Seq(child.sequence), id=str(child), description=""))
         else:
             records.extend(build_msa(graph, child))
     return records
