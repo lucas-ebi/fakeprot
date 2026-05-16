@@ -29,7 +29,7 @@ async function init() {
   pyodide = await loadPyodide();
 
   postMessage({type: 'status', msg: 'Installing packages…'});
-  await pyodide.loadPackage(['numpy', 'scipy', 'pandas', 'micropip']);
+  await pyodide.loadPackage(['numpy', 'scipy', 'micropip']);
   await pyodide.runPythonAsync(
     'import micropip\nawait micropip.install(["networkx","biopython"])'
   );
