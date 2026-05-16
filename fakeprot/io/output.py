@@ -202,7 +202,6 @@ def _write_run_info(config: SimulationConfig) -> None:
         "parameters": {
             "size": config.size,
             "length": config.length,
-            "p_gap": config.p_gap,
             "n_orthologs": config.n_orthologs,
             "gamma_shape": config.gamma_shape,
             "p_del": config.p_del,
