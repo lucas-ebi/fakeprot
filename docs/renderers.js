@@ -405,6 +405,27 @@ function renderTree(content, container) {
         seg(nx, ty(c._y), tx(c._x), ty(c._y), c.length > 0 ? c.length.toFixed(5) : null);
         draw(c);
       });
+      if (n.name) {
+        const hit = document.createElementNS(NS, 'circle');
+        hit.setAttribute('cx', nx); hit.setAttribute('cy', ny);
+        hit.setAttribute('r', '5'); hit.setAttribute('fill', 'transparent');
+        hit.style.cursor = 'default';
+        hit.addEventListener('mouseenter', () => {
+          tipText.textContent = n.name;
+          const tw = n.name.length * 6.2 + 6;
+          tipRect.setAttribute('x', nx - tw / 2 - 2); tipRect.setAttribute('y', ny - 14);
+          tipRect.setAttribute('width', tw + 4); tipRect.setAttribute('height', 14);
+          tipText.setAttribute('x', nx - tw / 2 + 1); tipText.setAttribute('y', ny - 7);
+          tip.style.display = '';
+        });
+        hit.addEventListener('mouseleave', () => { tip.style.display = 'none'; });
+        g.appendChild(hit);
+        const dot = document.createElementNS(NS, 'circle');
+        dot.setAttribute('cx', nx); dot.setAttribute('cy', ny);
+        dot.setAttribute('r', '2'); dot.setAttribute('fill', '#888');
+        dot.setAttribute('pointer-events', 'none');
+        g.appendChild(dot);
+      }
     } else {
       const dot = document.createElementNS(NS, 'circle');
       dot.setAttribute('cx', nx); dot.setAttribute('cy', ny);
