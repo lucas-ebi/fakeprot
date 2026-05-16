@@ -18,10 +18,11 @@ families. Starting from a single ancestral protein, the simulator repeatedly
 selects an extant species, optionally creates a paralog by gene duplication, and
 then speciates the selected lineage into two daughter species. Sequence evolution
 along every gene-tree edge combines WAG-derived amino-acid substitution
-probabilities, gamma-distributed site-rate heterogeneity, indel events, and
-probabilistic physicochemical constraints. Insertions are represented as new
-alignment columns, while deletions are represented as gaps, so every emitted
-sequence remains in a common alignment.
+probabilities (Whelan & Goldman, 2001), gamma-distributed site-rate
+heterogeneity (Yang, 1994), indel events, and probabilistic physicochemical
+constraints based on overlapping amino-acid property classes (Taylor, 1986).
+Insertions are represented as new alignment columns, while deletions are
+represented as gaps, so every emitted sequence remains in a common alignment.
 
 FakeProt is not intended to be a fully calibrated continuous-time model of
 protein evolution. Instead, it is a transparent benchmark generator whose
@@ -69,7 +70,7 @@ fakeprot SIZE LENGTH [options]
 | `-d`, `--p-del` | derived | Per-branch per-site deletion probability $p_d$. Defaults to 5% of the mean site substitution rate (see below). |
 | `-i`, `--p-ins` | derived | Per-branch per-site insertion probability $p_i$. Defaults to 0.1% of the mean site substitution rate (see below). |
 | `-n`, `--n-orthologs` | `1` | Target number of ortholog-group anchors. |
-| `-a`, `--shape` | `0.75` | Shape parameter $\alpha$ for the gamma site-rate model. Scale is fixed to $1/\alpha$ so that the mean rate equals 1. |
+| `-a`, `--shape` | `0.75` | Shape parameter $\alpha$ for the gamma site-rate model. Scale is fixed to $1/\alpha$ so that the mean rate equals 1, following the standard convention introduced by Yang (1994). |
 | `-r`, `--seed` | `None` | Random seed for reproducible simulations. |
 | `-f`, `--msa-format` | `fasta` | Alignment format: `fasta`, `clustal`, `nexus`, `phylip`, or `stockholm`. |
 | `-t`, `--tree-format` | `newick` | Tree format: `newick`, `nexus`, `nexml`, `phyloxml`, or `cdao`. |
@@ -79,15 +80,16 @@ fakeprot SIZE LENGTH [options]
 ### Notation
 
 Let $A$ be the set of 20 canonical amino acids and let $\pi_a$ be the WAG
-background frequency of amino acid $a \in A$. FakeProt stores the WAG empirical
-off-diagonal substitution probabilities in a row-stochastic matrix $W$, where
-$W_{ab}$ is the conditional probability of proposing residue $b$ from residue
-$a$, with $a \neq b$.
+background frequency of amino acid $a \in A$ (Whelan & Goldman, 2001). FakeProt
+stores the WAG empirical off-diagonal substitution probabilities in a
+row-stochastic matrix $W$, where $W_{ab}$ is the conditional probability of
+proposing residue $b$ from residue $a$, with $a \neq b$.
 
 Let $C$ be the set of physicochemical classes used by the simulator. Each class
-$c \in C$ corresponds to a subset $S_c \subset A$; classes are allowed to overlap.
-The class prior is proportional to the WAG background mass of its member
-residues:
+$c \in C$ corresponds to a subset $S_c \subset A$; classes are allowed to
+overlap, following the Venn-diagram classification of amino-acid properties
+introduced by Taylor (1986). The class prior is proportional to the WAG
+background mass of its member residues:
 
 ```math
 \omega_c =
@@ -105,12 +107,12 @@ P(X=a \mid c) =
 ### Site-Rate Heterogeneity
 
 Given root length $L$, FakeProt assigns a site-specific mutation probability
-$r_i$ to every alignment site. The first site is fixed at $r_1 = 0$
-to preserve the initial methionine. For the remaining $L - 1$ sites, rates
-are drawn from a $\Gamma(\alpha,\,\beta)$ distribution with
-$\beta = 1/\alpha$ (so the mean rate equals 1, following the standard
-phylogenetic convention). Specifically, $L-1$ evenly spaced quantile values
-are taken between the 1st and 99th percentiles:
+$r_i$ to every alignment site, following the discrete-gamma approach of
+Yang (1994). The first site is fixed at $r_1 = 0$ to preserve the initial
+methionine. For the remaining $L - 1$ sites, rates are drawn from a
+$\Gamma(\alpha,\,\beta)$ distribution with $\beta = 1/\alpha$ (so the mean rate
+equals 1, the standard phylogenetic convention). Specifically, $L-1$ evenly
+spaced quantile values are taken between the 1st and 99th percentiles:
 
 ```math
 (x_1,\ldots,x_{L-1}) =
@@ -138,7 +140,9 @@ remaining values with probability proportional to
 ```
 
 This preserves the marginal set of gamma-derived rates while encouraging
-neighboring sites to have similar mutability.
+neighboring sites to have similar mutability, an autocorrelation-along-sequence
+pattern motivated by hidden Markov models of rate variation
+(Felsenstein & Churchill, 1996; see also Yang, 1995).
 
 ### Root Sequence
 
@@ -159,8 +163,9 @@ P(c_i = \varnothing) = r_i.
 
 If constrained, the class is drawn from
 $\text{Categorical}(\omega)$ and the amino acid is drawn from the
-class-conditional WAG background distribution. If unconstrained, the amino acid
-is drawn directly from the WAG background frequencies $\pi$.
+class-conditional WAG background distribution (using the overlapping class
+scheme of Taylor, 1986). If unconstrained, the amino acid is drawn directly
+from the WAG background frequencies $\pi$.
 
 ### Substitution Model Along an Edge
 
@@ -174,7 +179,7 @@ P(\mathrm{delete}\ i) = p_d\,r_i.
 
 If the site is not deleted and has no physicochemical constraint, it is retained
 with probability $1 - r_i$; otherwise a new residue is sampled using the WAG row
-for the current residue:
+for the current residue (Whelan & Goldman, 2001):
 
 ```math
 P(X_i' = x_i) = 1 - r_i,
@@ -213,8 +218,8 @@ Gaps in the final alignment arise from two distinct processes with separate
 per-branch, per-site probabilities $p_d$ (deletion) and $p_i$ (insertion).
 
 **Deletions** accumulate along each lineage's path from the root. For a Yule
-tree with $n$ leaves the expected path length is $2\ln n$, giving expected
-deletion gap fraction
+(pure-birth) tree with $n$ leaves (Yule, 1925; Aldous, 2001) the expected leaf
+depth is $2(H_n - 1) \approx 2\ln n$, giving expected deletion gap fraction
 
 ```math
 f_d \;\approx\; \bar{r}\,p_d\,2\ln n.
@@ -231,7 +236,8 @@ f_i \;\approx\; \frac{4n\,\bar{r}\,p_i}{1 + 4n\,\bar{r}\,p_i}.
 
 The likelihood that a gappy column with $k$ gaps was caused by a deletion
 versus an insertion can be assessed via the subtree-size distribution of a
-Yule tree ($P(\text{size}=s) \propto 1/s$):
+Yule tree, which is approximately $P(\text{size}=s) \propto 1/s$
+(Aldous, 2001):
 
 ```math
 \frac{P(\text{deletion} \mid k)}{P(\text{insertion} \mid k)}
@@ -265,10 +271,12 @@ naturally with the number of sequences: deletion gaps accumulate as
 $O(\log n)$ (from tree depth) and insertion gaps as $O(n)$ (from the
 alignment-wide amplification). This matches the empirical observation that
 larger, more diverged protein families are substantially gappier — a pattern
-well documented in databases such as Pfam.
+well documented in databases such as Pfam (Mistry et al., 2021).
 
 After an undeleted non-gap site, FakeProt may introduce an insertion run using a
-two-stage model that decouples start probability from run length. An insertion
+two-stage model that decouples start probability from run length. This is a
+discrete-time analogue of the geometric-length indel model first formalised
+by Thorne, Kishino & Felsenstein (1991, the "TKF91" model). An insertion
 begins with probability
 
 ```math
@@ -283,10 +291,11 @@ length with mean $1/(1-p_{\text{ext}}) = 2$:
 P(\text{extend by one more} \mid \text{already inserting}) = p_{\text{ext}}.
 ```
 
-A geometric run-length distribution is a reasonable approximation to the
+A geometric run-length distribution is a tractable approximation to the
 Zipfian (power-law) distribution empirically observed in real protein
 alignments, where the probability of a gap of length $L$ decreases
-approximately as $L^{-1.8}$ (Chang & Benner, 2004).
+approximately as $L^{-1.7}$ (Benner, Cohen & Gonnet, 1993;
+Chang & Benner, 2004).
 
 Inserted residues are sampled from the WAG background distribution, assigned rate
 $1.0$, and assigned no physicochemical class. When an insertion creates a new
@@ -304,7 +313,11 @@ corresponding class-conditional distribution.
 
 FakeProt maintains two directed graphs during simulation: a species tree and a
 sequence/gene tree. The species tree contains extant and ancestral species nodes.
-The gene tree contains ancestral, duplicated, and extant sequence nodes.
+The gene tree contains ancestral, duplicated, and extant sequence nodes. The
+orthology and paralogy terminology used throughout follows the definitions
+introduced by Fitch (1970) and the modern formulation reviewed by
+Koonin (2005): orthologs descend from a common ancestor via speciation, while
+paralogs descend via gene duplication.
 
 At each simulation step:
 
@@ -334,10 +347,10 @@ redrawn using a perturbed shape parameter
 \alpha' \sim N(\alpha, 1) \mid \alpha' \geq 1,
 ```
 
-with scale fixed to $1/\alpha'$ as usual. The rank order of the parent rates is
-preserved: sites that were slow or fast in the parent remain relatively slow or
-fast in the duplicate, but
-the numerical rate scale may shift.
+with scale fixed to $1/\alpha'$ as usual (Yang, 1994). The rank order of the
+parent rates is preserved: sites that were slow or fast in the parent remain
+relatively slow or fast in the duplicate, but the numerical rate scale may
+shift.
 
 For duplicated sequences, physicochemical constraints may also be relaxed or
 changed. If a parent site has class $c$, the duplicate first retains any
@@ -368,9 +381,9 @@ paralog, the gene tree.
 
 ### Ortholog Groups
 
-Ortholog groups are defined by anchor nodes: the root sequence and every
-successful duplication copy. A leaf belongs to anchor $a_j$ if it descends from
-$a_j$ without crossing another ortholog anchor:
+Ortholog groups are defined by anchor nodes (Fitch, 1970; Koonin, 2005): the
+root sequence and every successful duplication copy. A leaf belongs to anchor
+$a_j$ if it descends from $a_j$ without crossing another ortholog anchor:
 
 ```math
 OG_j =
@@ -428,11 +441,12 @@ FakeProt is a benchmark simulator rather than an inference-calibrated biological
 model. In particular:
 
 1. Site-rate values are used directly as event probabilities after evaluating a
-   gamma density; they are not continuous-time branch-scaled rates.
+   gamma density; they are not continuous-time branch-scaled rates in the sense
+   of a Yang (1994) discrete-gamma likelihood model.
 2. Branch lengths are post hoc normalized mismatch fractions, not parameters
    used to generate substitutions.
-3. Physicochemical classes overlap, so class priors are normalized over class
-   masses rather than over a partition of amino acids.
+3. Physicochemical classes overlap (Taylor, 1986), so class priors are
+   normalized over class masses rather than over a partition of amino acids.
 4. The requested number of ortholog groups is a target, not a hard guarantee; if
    too few duplication opportunities occur before the leaf target is reached, the
    simulator emits a warning.
@@ -452,17 +466,71 @@ pytest
 
 ## Citation
 
-If you use FakeProt, please cite FakeProt itself where appropriate and cite the
-WAG substitution model and the empirical indel study used by the simulator:
+If you use FakeProt, please cite FakeProt itself and, where appropriate, the
+original sources of the models and concepts it implements.
+
+### Substitution model
 
 > Whelan, S. and Goldman, N. (2001). A general empirical model of protein
 > evolution derived from multiple protein families using a maximum-likelihood
-> approach. Molecular Biology and Evolution, 18(5), 691-699.
->
-> Chang, M.S.S. and Benner, S.A. (2004). Empirical analysis of protein
-> insertions and deletions determining parameters for the correct placement of
-> gaps in protein sequence alignments. Journal of Molecular Biology,
-> 341(2), 617-631.
+> approach. *Molecular Biology and Evolution*, 18(5), 691–699.
+
+### Site-rate heterogeneity and rate autocorrelation
+
+> Yang, Z. (1994). Maximum likelihood phylogenetic estimation from DNA
+> sequences with variable rates over sites: approximate methods.
+> *Journal of Molecular Evolution*, 39(3), 306–314.
+
+> Felsenstein, J. and Churchill, G. A. (1996). A Hidden Markov Model approach
+> to variation among sites in rate of evolution. *Molecular Biology and
+> Evolution*, 13(1), 93–104.
+
+> Yang, Z. (1995). A space-time process model for the evolution of DNA
+> sequences. *Genetics*, 139(2), 993–1005.
+
+### Physicochemical amino-acid classes
+
+> Taylor, W. R. (1986). The classification of amino acid conservation.
+> *Journal of Theoretical Biology*, 119(2), 205–218.
+
+### Indel processes and gap length distributions
+
+> Thorne, J. L., Kishino, H. and Felsenstein, J. (1991). An evolutionary
+> model for maximum likelihood alignment of DNA sequences.
+> *Journal of Molecular Evolution*, 33(2), 114–124.
+
+> Benner, S. A., Cohen, M. A. and Gonnet, G. H. (1993). Empirical and
+> structural models for insertions and deletions in the divergent evolution
+> of proteins. *Journal of Molecular Biology*, 229(4), 1065–1082.
+
+> Chang, M. S. S. and Benner, S. A. (2004). Empirical analysis of protein
+> insertions and deletions determining parameters for the correct placement
+> of gaps in protein sequence alignments. *Journal of Molecular Biology*,
+> 341(2), 617–631.
+
+### Yule (pure-birth) trees and their statistics
+
+> Yule, G. U. (1925). A mathematical theory of evolution, based on the
+> conclusions of Dr. J. C. Willis, F.R.S. *Philosophical Transactions of
+> the Royal Society of London, Series B*, 213, 21–87.
+
+> Aldous, D. J. (2001). Stochastic models and descriptive statistics for
+> phylogenetic trees, from Yule to today. *Statistical Science*, 16(1), 23–34.
+
+### Orthology and paralogy
+
+> Fitch, W. M. (1970). Distinguishing homologous from analogous proteins.
+> *Systematic Zoology*, 19(2), 99–113.
+
+> Koonin, E. V. (2005). Orthologs, paralogs, and evolutionary genomics.
+> *Annual Review of Genetics*, 39, 309–338.
+
+### Empirical observation of gap content in large protein families
+
+> Mistry, J., Chuguransky, S., Williams, L., Qureshi, M., Salazar, G. A.,
+> Sonnhammer, E. L. L., Tosatto, S. C. E., Paladin, L., Raj, S.,
+> Richardson, L. J., Finn, R. D. and Bateman, A. (2021). Pfam: the protein
+> families database in 2021. *Nucleic Acids Research*, 49(D1), D412–D419.
 
 ## License
 
