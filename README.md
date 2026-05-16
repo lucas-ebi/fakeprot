@@ -269,9 +269,10 @@ creates a gap in every other sequence, amplifying its effect on total gap
 content by a factor of approximately $n$. As a result, gap content grows
 naturally with the number of sequences: deletion gaps accumulate as
 $O(\log n)$ (from tree depth) and insertion gaps as $O(n)$ (from the
-alignment-wide amplification). This matches the empirical observation that
-larger, more diverged protein families are substantially gappier — a pattern
-well documented in databases such as Pfam (Mistry et al., 2021).
+alignment-wide amplification). This matches the empirical observation, well known to practitioners working
+with large protein-family databases such as Pfam (Finn et al., 2006;
+Mistry et al., 2021), that larger and more diverged families are
+substantially gappier.
 
 After an undeleted non-gap site, FakeProt may introduce an insertion run using a
 two-stage model that decouples start probability from run length. This is a
@@ -525,8 +526,13 @@ original sources of the models and concepts it implements.
 > Koonin, E. V. (2005). Orthologs, paralogs, and evolutionary genomics.
 > *Annual Review of Genetics*, 39, 309–338.
 
-### Empirical observation of gap content in large protein families
+### Protein-family database
 
+> Finn, R. D., Mistry, J., Schuster-Böckler, B., Griffiths-Jones, S.,
+> Hollich, V., Lassmann, T., Moxon, S., Marshall, M., Khanna, A., Durbin, R.
+> et al. (2006). Pfam: clans, web tools and services. *Nucleic Acids
+> Research*, 34, D247–D251.
+>
 > Mistry, J., Chuguransky, S., Williams, L., Qureshi, M., Salazar, G. A.,
 > Sonnhammer, E. L. L., Tosatto, S. C. E., Paladin, L., Raj, S.,
 > Richardson, L. J., Finn, R. D. and Bateman, A. (2021). Pfam: the protein
