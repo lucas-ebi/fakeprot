@@ -66,7 +66,8 @@ fakeprot SIZE LENGTH [options]
 | Option | Default | Meaning |
 | --- | --- | --- |
 | `-o`, `--out` | `fakeprot_out` | Prefix for all output files. |
-| `-g`, `--p-gap` | `1/SIZE` | Baseline gap/indel probability, denoted below by $p_g$. |
+| `-d`, `--p-del` | derived | Per-branch per-site deletion probability $p_d$. Defaults to target ~3% gap content from deletions (see below). |
+| `-i`, `--p-ins` | derived | Per-branch per-site insertion probability $p_i$. Defaults to target ~2% gap content from insertions (see below). |
 | `-n`, `--n-orthologs` | `1` | Target number of ortholog-group anchors. |
 | `-a`, `--shape` | `0.75` | Shape parameter $\alpha$ for the gamma site-rate model. Scale is fixed to $1/\alpha$ so that the mean rate equals 1. |
 | `-r`, `--seed` | `None` | Random seed for reproducible simulations. |
@@ -168,7 +169,7 @@ to right. At a non-gap site with parent residue $x_i$, site rate $r_i$, and
 constraint $c_i$, deletion is considered first:
 
 ```math
-P(\mathrm{delete}\ i) = p_g r_i.
+P(\mathrm{delete}\ i) = p_d\,r_i.
 ```
 
 If the site is not deleted and has no physicochemical constraint, it is retained
@@ -208,11 +209,55 @@ process below.
 
 ### Insertions, Deletions, and Gap Filling
 
+Gaps in the final alignment arise from two distinct processes with separate
+per-branch, per-site probabilities $p_d$ (deletion) and $p_i$ (insertion).
+
+**Deletions** accumulate along each lineage's path from the root. For a Yule
+tree with $n$ leaves the expected path length is $2\ln n$, giving expected
+deletion gap fraction
+
+```math
+f_d \;\approx\; \bar{r}\,p_d\,2\ln n.
+```
+
+**Insertions** in any one lineage create a new alignment column that appears
+as a gap in all other $n-1$ sequences. Each insertion event therefore has an
+$n$-fold amplifying effect on total gap cells. The expected insertion gap
+fraction is
+
+```math
+f_i \;\approx\; \frac{4n\,\bar{r}\,p_i}{1 + 4n\,\bar{r}\,p_i}.
+```
+
+The likelihood that a gappy column with $k$ gaps was caused by a deletion
+versus an insertion can be assessed via the subtree-size distribution of a
+Yule tree ($P(\text{size}=s) \propto 1/s$):
+
+```math
+\frac{P(\text{deletion} \mid k)}{P(\text{insertion} \mid k)}
+= \frac{p_d}{p_i} \cdot \frac{n - k}{k}.
+```
+
+Columns with few gaps ($k \ll n/2$) are predominantly deletions; columns with
+many gaps ($k \gg n/2$) are predominantly insertions. The crossover is at
+$k = n\,p_d/(p_d + p_i)$.
+
+Defaults are derived by inverting $f_d = 0.03$ and $f_i = 0.02$:
+
+```math
+p_d = \frac{0.03}{\bar{r}\,2\ln n},
+\qquad
+p_i = \frac{0.02}{0.98 \cdot 4n\,\bar{r}},
+\qquad
+\bar{r} = \frac{F^{-1}_{\Gamma(\alpha,\,1/\alpha)}(0.01) + F^{-1}_{\Gamma(\alpha,\,1/\alpha)}(0.99)}
+               {2\,F^{-1}_{\Gamma(\alpha,\,1/\alpha)}(0.99)}.
+```
+
 After an undeleted non-gap site, FakeProt may introduce an insertion run. The
 probability of the $j$-th inserted residue after site $i$ decays geometrically:
 
 ```math
-P(\mathrm{insert}_{i,j}) = r_i p_g 2^{-j},
+P(\mathrm{insert}_{i,j}) = r_i\,p_i\,2^{-j},
 \qquad j = 0,1,2,\ldots
 ```
 
@@ -225,7 +270,7 @@ Existing gap runs can also be filled in descendant lineages. For the $j$-th
 position in a consecutive gap run, the fill probability is
 
 ```math
-P(\mathrm{fill}_{j}) = p_g 2^{-j}.
+P(\mathrm{fill}_{j}) = p_i\,2^{-j}.
 ```
 
 Filling stops after the first failed attempt in that run. Filled residues are
@@ -260,16 +305,15 @@ P(\mathrm{duplication}) = 2^{-(K-m)/s}.
 
 When a duplication occurs, one paralog in the selected species is copied and
 mutated. The new copy becomes an ortholog-group anchor. Its rate profile is
-redrawn using perturbed gamma parameters
+redrawn using a perturbed shape parameter
 
 ```math
 \alpha' \sim N(\alpha, 1) \mid \alpha' \geq 1,
-\qquad
-\beta' \sim N(\beta, 1) \mid \beta' \geq 1,
 ```
 
-while preserving the rank order of the parent rates. That is, sites that were
-slow or fast in the parent remain relatively slow or fast in the duplicate, but
+with scale fixed to $1/\alpha'$ as usual. The rank order of the parent rates is
+preserved: sites that were slow or fast in the parent remain relatively slow or
+fast in the duplicate, but
 the numerical rate scale may shift.
 
 For duplicated sequences, physicochemical constraints may also be relaxed or

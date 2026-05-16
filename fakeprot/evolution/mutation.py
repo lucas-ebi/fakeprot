@@ -209,7 +209,7 @@ def _sample_gap_fill(pc_value: int) -> int:
 def _mutation_decisions(
     chars: np.ndarray,
     rates: np.ndarray,
-    p_gap: float,
+    p_del: float,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Draw deletion and substitution masks for all non-gap sites."""
     rates_f = rates.astype(np.float64, copy=False)
@@ -219,7 +219,7 @@ def _mutation_decisions(
     rand_del = np.random.random(len(chars))
     rand_sub = np.random.random(len(chars))
 
-    deleted = active & (rand_del < rates_f * p_gap)
+    deleted = active & (rand_del < rates_f * p_del)
     surviving = active & ~deleted
     will_mutate = surviving & (rand_sub >= 1.0 - rates_f)
     return is_gap, deleted, will_mutate
@@ -260,7 +260,7 @@ def _append_gap_run(
     end: int,
     rates: np.ndarray,
     pc: np.ndarray,
-    p_gap: float,
+    p_ins: float,
     out_chars: list[int],
     out_rates: list[float],
     out_pc: list[int],
@@ -270,7 +270,7 @@ def _append_gap_run(
     for step, pos in enumerate(range(start, end)):
         if done:
             char = CHAR_GAP
-        elif np.random.random() < p_gap * (2.0 ** -step):
+        elif np.random.random() < p_ins * (2.0 ** -step):
             char = _sample_gap_fill(int(pc[pos]))
         else:
             char = CHAR_GAP
@@ -294,8 +294,9 @@ def _apply_mutations_and_indels(
     may add new alignment columns.
     """
     n = len(chars)
-    p_gap = config.p_gap
-    is_gap, deleted, will_mutate = _mutation_decisions(chars, rates, p_gap)
+    p_del = config.p_del
+    p_ins = config.p_ins
+    is_gap, deleted, will_mutate = _mutation_decisions(chars, rates, p_del)
     new_chars = _apply_substitutions(chars, pc, will_mutate)
 
     out_chars: list[int] = []
@@ -310,7 +311,7 @@ def _apply_mutations_and_indels(
             j = i + 1
             while j < n and chars[j] == CHAR_GAP:
                 j += 1
-            _append_gap_run(i, j, rates, pc, p_gap, out_chars, out_rates, out_pc)
+            _append_gap_run(i, j, rates, pc, p_ins, out_chars, out_rates, out_pc)
             i = j
             continue
 
@@ -327,7 +328,7 @@ def _apply_mutations_and_indels(
 
         step = 0
         rate_i = float(rates[i])
-        while np.random.random() < rate_i * p_gap * (2.0 ** -step):
+        while np.random.random() < rate_i * p_ins * (2.0 ** -step):
             out_chars.append(_sample_from_cdf(AA_FREQUENCY_CDF))
             out_rates.append(1.0)
             out_pc.append(PC_NONE)

@@ -34,11 +34,18 @@ def main() -> None:
         help="Prefix for all output filenames (default: fakeprot_out).",
     )
     parser.add_argument(
-        "-g", "--p-gap",
-        dest="p_gap",
+        "-d", "--p-del",
+        dest="p_del",
         type=float,
         default=None,
-        help="Prior probability of an indel event (default: 1/size).",
+        help="Per-branch per-site deletion probability (default: derived to target ~3%% gap content from deletions).",
+    )
+    parser.add_argument(
+        "-i", "--p-ins",
+        dest="p_ins",
+        type=float,
+        default=None,
+        help="Per-branch per-site insertion probability (default: derived to target ~2%% gap content from insertions).",
     )
     parser.add_argument(
         "-n", "--n-orthologs",
@@ -79,7 +86,8 @@ def main() -> None:
     config = SimulationConfig(
         size=args.size,
         length=args.length,
-        p_gap=args.p_gap,
+        p_del=args.p_del,
+        p_ins=args.p_ins,
         n_orthologs=args.n_orthologs,
         gamma_shape=args.gamma_shape,
         seed=args.seed,

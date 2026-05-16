@@ -10,13 +10,15 @@ from fakeprot.models.species import Species
 
 
 class TestSimulationConfig:
-    def test_p_gap_defaults_to_1_over_size(self):
+    def test_p_del_p_ins_default_to_positive_floats(self):
         config = SimulationConfig(size=50, length=100)
-        assert config.p_gap == pytest.approx(1.0 / 50)
+        assert config.p_del > 0.0
+        assert config.p_ins > 0.0
 
-    def test_explicit_p_gap_preserved(self):
-        config = SimulationConfig(size=50, length=100, p_gap=0.05)
-        assert config.p_gap == pytest.approx(0.05)
+    def test_explicit_p_del_p_ins_preserved(self):
+        config = SimulationConfig(size=50, length=100, p_del=0.05, p_ins=0.01)
+        assert config.p_del == pytest.approx(0.05)
+        assert config.p_ins == pytest.approx(0.01)
 
     def test_invalid_msa_format_raises(self):
         with pytest.raises(ValueError, match="msa_format"):

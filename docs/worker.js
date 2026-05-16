@@ -71,9 +71,10 @@ try:
     _cfg = SimulationConfig(
         size=${cfg.size},
         length=${cfg.length},
-        p_gap=${cfg.p_gap},
         n_orthologs=${cfg.n_orthologs},
         gamma_shape=${cfg.gamma_shape},
+        p_del=${cfg.p_del ?? 'None'},
+        p_ins=${cfg.p_ins ?? 'None'},
         seed=${cfg.seed},
         out="/output/result",
         msa_format="${cfg.msa_format}",

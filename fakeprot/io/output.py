@@ -205,6 +205,8 @@ def _write_run_info(config: SimulationConfig) -> None:
             "p_gap": config.p_gap,
             "n_orthologs": config.n_orthologs,
             "gamma_shape": config.gamma_shape,
+            "p_del": config.p_del,
+            "p_ins": config.p_ins,
             "seed": config.seed,
             "out": config.out,
             "msa_format": config.msa_format,
