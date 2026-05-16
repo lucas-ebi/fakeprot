@@ -420,7 +420,7 @@ For output prefix `PREFIX`, FakeProt writes:
 | `PREFIX_current_sequences.<msa-format>` | Extant leaf sequences only. |
 | `PREFIX_gene_tree.<tree-format>` | Gene tree with normalized Hamming branch lengths. |
 | `PREFIX_species_cladogram.<tree-format>` | Species cladogram without branch lengths. |
-| `PREFIX_ortholog_groups.csv` | Mapping from extant sequence identifiers to ortholog-group labels. |
+| `PREFIX_ortholog_groups.json` | Mapping from extant sequence identifiers to ortholog-group labels (`{"sp1_seq1": "OG_A", ...}`). |
 | `PREFIX_OG_A.<msa-format>`, `PREFIX_OG_B.<msa-format>`, ... | Per-ortholog-group alignments, emitted when `--n-orthologs > 1`. |
 | `PREFIX_physicochemical_groups.json` | Per-column amino-acid frequencies and physicochemical class annotations for each ortholog group. |
 | `PREFIX_run_info.json` | Version, timestamp, parameters, and random seed for reproducibility. |

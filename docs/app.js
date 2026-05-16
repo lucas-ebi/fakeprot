@@ -10,7 +10,7 @@ function fileMeta(name) {
   if (name.includes('gene_tree'))              return {type:'TREE', view:'tree', desc:'Gene phylogeny with branch lengths'};
   if (name.includes('species_cladogram'))      return {type:'TREE', view:'tree', desc:'Species tree (topology only)'};
   if (name.includes('OG_'))                    return {type:'MSA',  view:'msa',  desc:'Ortholog group alignment'};
-  if (name.includes('ortholog_groups'))        return {type:'CSV',  view:'csv',  desc:'Sequence‑to‑ortholog group mapping'};
+  if (name.includes('ortholog_groups'))        return {type:'JSON', view:'json', desc:'Sequence‑to‑ortholog group mapping'};
   if (name.includes('physicochemical_groups')) return {type:'JSON', view:'json', desc:'Per‑column amino acid frequencies and physicochemical class per ortholog group'};
   if (name.includes('run_info'))               return {type:'JSON', view:'json', desc:'Run parameters and timestamp'};
   return {type:'—', view:null, desc:''};

@@ -14,8 +14,6 @@ from Bio.Phylo.BaseTree import Tree
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 from Bio.SeqUtils import seq3
-from pandas import DataFrame
-
 from fakeprot.config import SimulationConfig
 from fakeprot.evolution.tree import (
     build_gene_tree,
@@ -52,7 +50,7 @@ def write_outputs(
     _write_current_sequences(config, store, sequence_tree, root_sequence)
     _write_gene_tree(config, store, sequence_tree, root_sequence, sequence_length)
     _write_species_cladogram(config, species_tree, root_species)
-    _write_ortholog_groups_csv(config, ortholog_groups, orthologs)
+    _write_ortholog_groups_json(config, ortholog_groups, orthologs)
     if config.n_orthologs > 1:
         _write_ortholog_alignments(config, store, ortholog_groups)
     _write_pc_groups_json(config, store, ortholog_groups, orthologs, sequence_length)
@@ -116,17 +114,17 @@ def _write_species_cladogram(
     )
 
 
-def _write_ortholog_groups_csv(
+def _write_ortholog_groups_json(
     config: SimulationConfig,
     ortholog_groups: dict[int, list[Sequence]],
     orthologs: list[Sequence],
 ) -> None:
-    rows: dict[str, list] = {"Sequence": [], "OG": []}
+    mapping = {}
     for i in sorted(ortholog_groups):
         for seq in ortholog_groups[i]:
-            rows["Sequence"].append(seq)
-            rows["OG"].append(og_label(i))
-    DataFrame(rows).to_csv(f"{config.out}_ortholog_groups.csv", index=False)
+            mapping[str(seq)] = og_label(i)
+    with open(f"{config.out}_ortholog_groups.json", "w") as fh:
+        json.dump(mapping, fh, indent=2)
 
 
 def _write_ortholog_alignments(
