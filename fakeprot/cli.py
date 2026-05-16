@@ -38,7 +38,7 @@ def main() -> None:
         dest="p_del",
         type=float,
         default=None,
-        help="Per-branch per-site deletion probability (default: 4%% of mean site substitution rate).",
+        help="Per-branch per-site deletion probability (default: 5%% of mean site substitution rate).",
     )
     parser.add_argument(
         "-i", "--p-ins",

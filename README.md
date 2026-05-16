@@ -66,7 +66,7 @@ fakeprot SIZE LENGTH [options]
 | Option | Default | Meaning |
 | --- | --- | --- |
 | `-o`, `--out` | `fakeprot_out` | Prefix for all output files. |
-| `-d`, `--p-del` | derived | Per-branch per-site deletion probability $p_d$. Defaults to 4% of the mean site substitution rate (see below). |
+| `-d`, `--p-del` | derived | Per-branch per-site deletion probability $p_d$. Defaults to 5% of the mean site substitution rate (see below). |
 | `-i`, `--p-ins` | derived | Per-branch per-site insertion probability $p_i$. Defaults to 0.1% of the mean site substitution rate (see below). |
 | `-n`, `--n-orthologs` | `1` | Target number of ortholog-group anchors. |
 | `-a`, `--shape` | `0.75` | Shape parameter $\alpha$ for the gamma site-rate model. Scale is fixed to $1/\alpha$ so that the mean rate equals 1. |
@@ -254,10 +254,10 @@ The defaults are design choices tuned to produce realistic scaling behaviour
 rather than values read directly from any single empirical study:
 
 ```math
-p_d = 0.04\,\bar{r}, \qquad p_i = 0.001\,\bar{r}.
+p_d = 0.05\,\bar{r}, \qquad p_i = 0.001\,\bar{r}.
 ```
 
-The deletion coefficient (4% of the mean substitution rate) and insertion
+The deletion coefficient (5% of the mean substitution rate) and insertion
 coefficient (0.1%) are not equal because each insertion in a single lineage
 creates a gap in every other sequence, amplifying its effect on total gap
 content by a factor of approximately $n$. As a result, gap content grows
