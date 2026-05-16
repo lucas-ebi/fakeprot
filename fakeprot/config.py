@@ -28,11 +28,15 @@ class SimulationConfig:
         hi = _gamma.ppf(0.99, self.gamma_shape, scale=scale)
         mean_r = (lo + hi) / (2.0 * hi)   # mean of linspace-normalised rates
         if self.p_del is None:
-            # Target 3% gap content from deletions; f_del ≈ p_del × mean_r × 2 ln(n)
-            self.p_del = 0.03 / (mean_r * 2.0 * np.log(self.size))
+            # Deletion rate = 4 % of mean substitution rate per branch (design default).
+            # Gap content from deletions grows naturally as O(log n) with tree depth.
+            self.p_del = 0.04 * mean_r
         if self.p_ins is None:
-            # Target 2% gap content from insertions; f_ins ≈ 4n p_ins mean_r / (1 + 4n p_ins mean_r)
-            self.p_ins = 0.02 / ((1.0 - 0.02) * 4.0 * self.size * mean_r)
+            # Per-lineage insertion rate ≈ 0.1 % of substitution rate.
+            # Each insertion is amplified ~n-fold in the alignment (it creates a gap in
+            # every other sequence), so this small coefficient already yields ~1 % insertion
+            # gap content at n = 100, growing toward ~10 % at n = 1000.
+            self.p_ins = 0.001 * mean_r
         if self.msa_format not in VALID_MSA_FORMATS:
             raise ValueError(
                 f"msa_format must be one of {sorted(VALID_MSA_FORMATS)}, got {self.msa_format!r}"

@@ -66,8 +66,8 @@ fakeprot SIZE LENGTH [options]
 | Option | Default | Meaning |
 | --- | --- | --- |
 | `-o`, `--out` | `fakeprot_out` | Prefix for all output files. |
-| `-d`, `--p-del` | derived | Per-branch per-site deletion probability $p_d$. Defaults to target ~3% gap content from deletions (see below). |
-| `-i`, `--p-ins` | derived | Per-branch per-site insertion probability $p_i$. Defaults to target ~2% gap content from insertions (see below). |
+| `-d`, `--p-del` | derived | Per-branch per-site deletion probability $p_d$. Defaults to 4% of the mean site substitution rate (see below). |
+| `-i`, `--p-ins` | derived | Per-branch per-site insertion probability $p_i$. Defaults to 0.1% of the mean site substitution rate (see below). |
 | `-n`, `--n-orthologs` | `1` | Target number of ortholog-group anchors. |
 | `-a`, `--shape` | `0.75` | Shape parameter $\alpha$ for the gamma site-rate model. Scale is fixed to $1/\alpha$ so that the mean rate equals 1. |
 | `-r`, `--seed` | `None` | Random seed for reproducible simulations. |
@@ -242,16 +242,30 @@ Columns with few gaps ($k \ll n/2$) are predominantly deletions; columns with
 many gaps ($k \gg n/2$) are predominantly insertions. The crossover is at
 $k = n\,p_d/(p_d + p_i)$.
 
-Defaults are derived by inverting $f_d = 0.03$ and $f_i = 0.02$:
+Default values are calibrated to the mean per-branch substitution rate
+$\bar{r}$, defined as the mean of the linspace-normalised gamma quantiles:
 
 ```math
-p_d = \frac{0.03}{\bar{r}\,2\ln n},
-\qquad
-p_i = \frac{0.02}{0.98 \cdot 4n\,\bar{r}},
-\qquad
 \bar{r} = \frac{F^{-1}_{\Gamma(\alpha,\,1/\alpha)}(0.01) + F^{-1}_{\Gamma(\alpha,\,1/\alpha)}(0.99)}
                {2\,F^{-1}_{\Gamma(\alpha,\,1/\alpha)}(0.99)}.
 ```
+
+The defaults are design choices tuned to produce realistic scaling behaviour
+rather than values read directly from any single empirical study:
+
+```math
+p_d = 0.04\,\bar{r}, \qquad p_i = 0.001\,\bar{r}.
+```
+
+The deletion coefficient (4% of the mean substitution rate) and insertion
+coefficient (0.1%) are not equal because each insertion in a single lineage
+creates a gap in every other sequence, amplifying its effect on total gap
+content by a factor of approximately $n$. As a result, gap content grows
+naturally with the number of sequences: deletion gaps accumulate as
+$O(\log n)$ (from tree depth) and insertion gaps as $O(n)$ (from the
+alignment-wide amplification). This matches the empirical observation that
+larger, more diverged protein families are substantially gappier — a pattern
+well documented in databases such as Pfam.
 
 After an undeleted non-gap site, FakeProt may introduce an insertion run using a
 two-stage model that decouples start probability from run length. An insertion
@@ -268,6 +282,11 @@ length with mean $1/(1-p_{\text{ext}}) = 2$:
 ```math
 P(\text{extend by one more} \mid \text{already inserting}) = p_{\text{ext}}.
 ```
+
+A geometric run-length distribution is a reasonable approximation to the
+Zipfian (power-law) distribution empirically observed in real protein
+alignments, where the probability of a gap of length $L$ decreases
+approximately as $L^{-1.8}$ (Chang & Benner, 2004).
 
 Inserted residues are sampled from the WAG background distribution, assigned rate
 $1.0$, and assigned no physicochemical class. When an insertion creates a new
@@ -434,11 +453,16 @@ pytest
 ## Citation
 
 If you use FakeProt, please cite FakeProt itself where appropriate and cite the
-WAG substitution model used by the simulator:
+WAG substitution model and the empirical indel study used by the simulator:
 
 > Whelan, S. and Goldman, N. (2001). A general empirical model of protein
 > evolution derived from multiple protein families using a maximum-likelihood
 > approach. Molecular Biology and Evolution, 18(5), 691-699.
+>
+> Chang, M.S.S. and Benner, S.A. (2004). Empirical analysis of protein
+> insertions and deletions determining parameters for the correct placement of
+> gaps in protein sequence alignments. Journal of Molecular Biology,
+> 341(2), 617-631.
 
 ## License
 

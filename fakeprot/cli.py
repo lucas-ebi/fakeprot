@@ -38,14 +38,14 @@ def main() -> None:
         dest="p_del",
         type=float,
         default=None,
-        help="Per-branch per-site deletion probability (default: derived to target ~3%% gap content from deletions).",
+        help="Per-branch per-site deletion probability (default: 4%% of mean site substitution rate).",
     )
     parser.add_argument(
         "-i", "--p-ins",
         dest="p_ins",
         type=float,
         default=None,
-        help="Per-branch per-site insertion probability (default: derived to target ~2%% gap content from insertions).",
+        help="Per-branch per-site insertion probability (default: 0.1%% of mean site substitution rate).",
     )
     parser.add_argument(
         "-n", "--n-orthologs",
