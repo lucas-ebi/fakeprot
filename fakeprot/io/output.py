@@ -55,7 +55,7 @@ def write_outputs(
     _write_ortholog_groups_csv(config, ortholog_groups, orthologs)
     if config.n_orthologs > 1:
         _write_ortholog_alignments(config, store, ortholog_groups)
-    _write_pc_groups_csv(config, store, ortholog_groups, orthologs, sequence_length)
+    _write_pc_groups_json(config, store, ortholog_groups, orthologs, sequence_length)
     _write_run_info(config)
 
 
@@ -155,44 +155,37 @@ def _write_fasta(path: str, store: MsaStore, sequences: list[Sequence]) -> None:
             fh.write("\n")
 
 
-def _write_pc_groups_csv(
+def _write_pc_groups_json(
     config: SimulationConfig,
     store: MsaStore,
     ortholog_groups: dict[int, list[Sequence]],
     orthologs: list[Sequence],
     sequence_length: int,
 ) -> None:
-    columns: dict[str, list] = {"MSA Column": list(range(1, sequence_length + 1))}
-    for i in range(len(orthologs)):
-        columns[f"OG {og_label(i)}"] = []
-
     og_row_indices = [
         [seq.row for seq in ortholog_groups[j]] for j in range(len(orthologs))
     ]
-
+    rows = []
     for col in range(sequence_length):
+        entry: dict = {"msa_column": col + 1}
         for j, ancestor in enumerate(orthologs):
             col_chars = store.chars[og_row_indices[j], col]
-            freq: dict[str, float] = {}
+            counts: dict[str, int] = {}
             for c in col_chars:
                 if c < CHAR_GAP:
                     aa = AMINO_ACIDS[int(c)]
-                    freq[aa] = freq.get(aa, 0) + 1
+                    counts[aa] = counts.get(aa, 0) + 1
             pc_val = store.pc[ancestor.row, col]
             pc_name = PHYSICOCHEMICAL_GROUPS[int(pc_val)] if pc_val >= 0 else None
-            if freq:
-                total = len(og_row_indices[j])
-                freq = {k: v / total for k, v in freq.items()}
-                freq_str = " ".join(
-                    f"{seq3(aa)}:{pct * 100:.2f}%"
-                    for aa, pct in sorted(freq.items(), key=lambda x: x[1], reverse=True)
-                )
-                entry = f"{pc_name} ({freq_str})"
-            else:
-                entry = pc_name
-            columns[f"OG {og_label(j)}"].append(entry)
-
-    DataFrame(columns).to_csv(f"{config.out}_physicochemical_groups.csv", index=False)
+            total = len(og_row_indices[j])
+            entry[f"OG_{og_label(j)}"] = {
+                "class": pc_name,
+                "frequencies": {seq3(aa): round(n / total, 4) for aa, n in
+                                sorted(counts.items(), key=lambda x: x[1], reverse=True)},
+            }
+        rows.append(entry)
+    with open(f"{config.out}_physicochemical_groups.json", "w") as fh:
+        json.dump(rows, fh, indent=2)
 
 
 def _write_run_info(config: SimulationConfig) -> None:

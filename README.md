@@ -422,7 +422,7 @@ For output prefix `PREFIX`, FakeProt writes:
 | `PREFIX_species_cladogram.<tree-format>` | Species cladogram without branch lengths. |
 | `PREFIX_ortholog_groups.csv` | Mapping from extant sequence identifiers to ortholog-group labels. |
 | `PREFIX_OG_A.<msa-format>`, `PREFIX_OG_B.<msa-format>`, ... | Per-ortholog-group alignments, emitted when `--n-orthologs > 1`. |
-| `PREFIX_physicochemical_groups.csv` | Per-column amino-acid frequencies and physicochemical class annotations for each ortholog group. |
+| `PREFIX_physicochemical_groups.json` | Per-column amino-acid frequencies and physicochemical class annotations for each ortholog group. |
 | `PREFIX_run_info.json` | Version, timestamp, parameters, and random seed for reproducibility. |
 
 ## Implementation Notes
