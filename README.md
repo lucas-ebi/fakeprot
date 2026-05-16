@@ -253,12 +253,20 @@ p_i = \frac{0.02}{0.98 \cdot 4n\,\bar{r}},
                {2\,F^{-1}_{\Gamma(\alpha,\,1/\alpha)}(0.99)}.
 ```
 
-After an undeleted non-gap site, FakeProt may introduce an insertion run. The
-probability of the $j$-th inserted residue after site $i$ decays geometrically:
+After an undeleted non-gap site, FakeProt may introduce an insertion run using a
+two-stage model that decouples start probability from run length. An insertion
+begins with probability
 
 ```math
-P(\mathrm{insert}_{i,j}) = r_i\,p_i\,2^{-j},
-\qquad j = 0,1,2,\ldots
+P(\text{start insertion after site } i) = r_i\,p_i,
+```
+
+and, once started, each additional residue is appended with a fixed extension
+probability $p_{\text{ext}} = 0.5$, giving a geometrically distributed run
+length with mean $1/(1-p_{\text{ext}}) = 2$:
+
+```math
+P(\text{extend by one more} \mid \text{already inserting}) = p_{\text{ext}}.
 ```
 
 Inserted residues are sampled from the WAG background distribution, assigned rate
@@ -266,16 +274,12 @@ $1.0$, and assigned no physicochemical class. When an insertion creates a new
 alignment site, FakeProt inserts a gap in every previously generated row so
 that all sequences remain aligned.
 
-Existing gap runs can also be filled in descendant lineages. For the $j$-th
-position in a consecutive gap run, the fill probability is
-
-```math
-P(\mathrm{fill}_{j}) = p_i\,2^{-j}.
-```
-
-Filling stops after the first failed attempt in that run. Filled residues are
-sampled either from the WAG background distribution or, when the site has a
-physicochemical class, from the corresponding class-conditional distribution.
+Existing gap runs can also be filled in descendant lineages. The first position
+in a gap run is filled with probability $p_i$; each subsequent position is filled
+with probability $p_{\text{ext}}$, independently. Filling stops after the first
+failed attempt. Filled residues are sampled either from the WAG background
+distribution or, when the site has a physicochemical class, from the
+corresponding class-conditional distribution.
 
 ## Species, Gene Trees, and Orthology
 

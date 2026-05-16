@@ -29,6 +29,10 @@ from fakeprot.substitution import (
 ROOT_AMINO_ACID = "M"
 ROOT_PC_GROUP = "With sulfur"  # Met belongs to the sulfur group
 
+# Probability of extending an insertion run by one more residue.
+# Decoupled from p_ins so run length ~ Geometric(1 - P_INS_EXTEND), mean ≈ 2.
+P_INS_EXTEND = 0.5
+
 
 def _sample_from_cdf(cdf: np.ndarray) -> int:
     """Sample an index from a cumulative distribution."""
@@ -270,11 +274,18 @@ def _append_gap_run(
     for step, pos in enumerate(range(start, end)):
         if done:
             char = CHAR_GAP
-        elif np.random.random() < p_ins * (2.0 ** -step):
-            char = _sample_gap_fill(int(pc[pos]))
+        elif step == 0:
+            if np.random.random() < p_ins:
+                char = _sample_gap_fill(int(pc[pos]))
+            else:
+                char = CHAR_GAP
+                done = True
         else:
-            char = CHAR_GAP
-            done = True
+            if np.random.random() < P_INS_EXTEND:
+                char = _sample_gap_fill(int(pc[pos]))
+            else:
+                char = CHAR_GAP
+                done = True
         out_chars.append(int(char))
         out_rates.append(float(rates[pos]))
         out_pc.append(int(pc[pos]))
@@ -326,9 +337,8 @@ def _apply_mutations_and_indels(
         out_rates.append(float(rates[i]))
         out_pc.append(int(pc[i]))
 
-        step = 0
         rate_i = float(rates[i])
-        while np.random.random() < rate_i * p_ins * (2.0 ** -step):
+        if np.random.random() < rate_i * p_ins:
             out_chars.append(_sample_from_cdf(AA_FREQUENCY_CDF))
             out_rates.append(1.0)
             out_pc.append(PC_NONE)
@@ -336,7 +346,14 @@ def _apply_mutations_and_indels(
                 i += 1
             else:
                 gaps.append(i)
-            step += 1
+            while np.random.random() < P_INS_EXTEND:
+                out_chars.append(_sample_from_cdf(AA_FREQUENCY_CDF))
+                out_rates.append(1.0)
+                out_pc.append(PC_NONE)
+                if i + 1 < n and chars[i + 1] == CHAR_GAP:
+                    i += 1
+                else:
+                    gaps.append(i)
 
         i += 1
 
