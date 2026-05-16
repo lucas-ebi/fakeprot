@@ -28,7 +28,7 @@ class SimulationConfig:
         hi = _gamma.ppf(0.99, self.gamma_shape, scale=scale)
         mean_r = (lo + hi) / (2.0 * hi)   # mean of linspace-normalised rates
         if self.p_del is None:
-            # Deletion rate = 4 % of mean substitution rate per branch (design default).
+            # Deletion rate = 5 % of mean substitution rate per branch (design default).
             # Gap content from deletions grows naturally as O(log n) with tree depth.
             self.p_del = 0.05 * mean_r
         if self.p_ins is None:
