@@ -1,4 +1,6 @@
-# FakeProt: a stochastic simulator for synthetic protein families
+# FakeProt
+
+**A stochastic simulator for synthetic protein families.**
 
 FakeProt is a stochastic simulator for generating synthetic protein families with
 known evolutionary histories. It produces multiple-sequence alignments, a gene
