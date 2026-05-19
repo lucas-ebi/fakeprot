@@ -175,13 +175,22 @@ function renderMSA(content, container, showLimitWarning = true) {
     ctx.textBaseline = 'middle'; ctx.font = '10px monospace';
     ctx.fillText(s.id.slice(0, 22), LW - 4, y + CH / 2);
     for (let col = 0; col < s.seq.length; col++) {
-      const aa = s.seq[col].toUpperCase();
+      const ch = s.seq[col];
       const x  = LW + col * CW;
-      ctx.fillStyle = AA_COLORS[aa] || '#cccccc';
-      ctx.fillRect(x, y, CW - 1, CH - 1);
-      ctx.fillStyle = '#fff'; ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle'; ctx.font = 'bold 10px monospace';
-      ctx.fillText(aa, x + CW / 2, y + CH / 2);
+      if (ch === '.') {
+        ctx.fillStyle = AA_COLORS['-'];
+        ctx.fillRect(x, y, CW - 1, CH - 1);
+        ctx.fillStyle = '#fff';
+        ctx.font = '9px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('.', x + CW / 2, y + CH / 2 + 1);
+      } else {
+        const aa  = ch.toUpperCase();
+        ctx.fillStyle = AA_COLORS[aa] || '#cccccc';
+        ctx.fillRect(x, y, CW - 1, CH - 1);
+        ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.font = 'bold 10px monospace';
+        ctx.fillText(ch, x + CW / 2, y + CH / 2);
+      }
     }
   });
   const wrap = document.createElement('div');
@@ -241,12 +250,12 @@ function renderLogo(content, container, showLimitWarning = true) {
     let nonGap = 0;
     let gap = 0;
     for (const seq of seqs) {
-      const aa = (seq.seq[col] || '-').toUpperCase();
-      if (aa === '-') {
+      const ch = seq.seq[col] || '-';
+      if (ch === '-' || ch === '.') {
         gap++;
-      } else if (counts[aa] !== undefined) {
-        counts[aa]++;
-        nonGap++;
+      } else {
+        const aa = ch.toUpperCase();
+        if (counts[aa] !== undefined) { counts[aa]++; nonGap++; }
       }
     }
 
