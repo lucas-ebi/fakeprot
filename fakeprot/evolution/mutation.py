@@ -38,37 +38,50 @@ def _sample_from_cdf(cdf: np.ndarray) -> int:
     return int(np.searchsorted(cdf, np.random.random(), side="right"))
 
 
-def wave_shuffle(values: list[float]) -> list[float]:
+def wave_shuffle(rates: list[float], branch_length: float) -> list[float]:
     """
-    Arrange values so adjacent elements are similar in magnitude.
+    Arrange rates so adjacent elements are similar in substitution probability.
 
-    Starts at a random element, then greedily picks the closest remaining
-    value at each step. Weights are proportional to (1 - |current - candidate|),
-    clamped to zero to guard against gamma PDF ranges that exceed 1.
+    Each rate r is mapped to a substitution probability p = 1 - exp(-t * r),
+    then normalised to [0, 1] so the proximity kernel has full dynamic range
+    regardless of branch length. Greedy nearest-neighbour traversal is run on
+    these normalised probabilities; the original rates are returned in that order.
     """
-    n = len(values)
-    avail = np.asarray(values, dtype=float).copy()
-    result = np.empty(n, dtype=float)
+    n = len(rates)
+    rates_arr = np.asarray(rates, dtype=float)
+
+    probs = 1.0 - np.exp(-branch_length * rates_arr)
+    max_p = probs.max()
+    keys = probs / max_p if max_p > 0.0 else probs.copy()
+
+    avail_keys = keys.copy()
+    avail_rates = rates_arr.copy()
+    result_rates = np.empty(n, dtype=float)
+    result_keys = np.empty(n, dtype=float)
     m = n
 
     start = np.random.randint(n)
-    result[0] = avail[start]
-    avail[start] = avail[m - 1]
+    result_rates[0] = avail_rates[start]
+    result_keys[0] = avail_keys[start]
+    avail_keys[start] = avail_keys[m - 1]
+    avail_rates[start] = avail_rates[m - 1]
     m -= 1
 
     for step in range(1, n):
-        distances = np.abs(avail[:m] - result[step - 1])
+        distances = np.abs(avail_keys[:m] - result_keys[step - 1])
         weights = np.maximum(0.0, 1.0 - distances)
         total = weights.sum()
         if total == 0.0:
             chosen = np.random.randint(m)
         else:
             chosen = np.random.choice(m, p=weights / total)
-        result[step] = avail[chosen]
-        avail[chosen] = avail[m - 1]
+        result_rates[step] = avail_rates[chosen]
+        result_keys[step] = avail_keys[chosen]
+        avail_keys[chosen] = avail_keys[m - 1]
+        avail_rates[chosen] = avail_rates[m - 1]
         m -= 1
 
-    return result.tolist()
+    return result_rates.tolist()
 
 
 def mutation_rate_distribution(
@@ -89,7 +102,7 @@ def mutation_rate_distribution(
         shape = config.gamma_shape
 
     rates = np.random.gamma(shape, 1.0 / shape, size=length - 1).tolist()
-    return [0.0] + wave_shuffle(rates)
+    return [0.0] + wave_shuffle(rates, branch_length=config.branch_length)
 
 
 def make_mutant(
