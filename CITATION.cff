@@ -4,7 +4,7 @@ title: "FakeProt: a stochastic simulator for synthetic protein families"
 authors:
   - family-names: "Carrijo de Oliveira"
     given-names: "Lucas"
-version: "0.2.0"
-date-released: "2026-05-16"
+version: "0.4.0"
+date-released: "2026-05-19"
 url: "https://github.com/lucas-ebi/fakeprot"
 license: GPL-3.0-or-later

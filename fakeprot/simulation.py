@@ -212,8 +212,14 @@ def _do_gene_duplication(
         and sequence_tree.out_degree(source) == 0
     )
 
+    dup_t = (
+        config.branch_length * config.dup_boost_factor
+        if np.random.random() < config.dup_boost_prob
+        else config.branch_length
+    )
     duplicate, n = store.commit_child(
-        *make_mutant(store, source, config, duplication=True), species, new_idx
+        *make_mutant(store, source, config, duplication=True, branch_length=dup_t),
+        species, new_idx,
     )
     sequence_length += n
     collection.append(duplicate)

@@ -72,6 +72,23 @@ def main() -> None:
         ),
     )
     parser.add_argument(
+        "--dup-boost-prob",
+        dest="dup_boost_prob",
+        type=float,
+        default=0.5,
+        help=(
+            "Probability that the duplicate's first edge is scaled by --dup-boost-factor "
+            "(default: 0.5). Set to 0 to disable post-duplication rate bursts."
+        ),
+    )
+    parser.add_argument(
+        "--dup-boost-factor",
+        dest="dup_boost_factor",
+        type=float,
+        default=2.0,
+        help="Branch-length multiplier applied to a boosted duplicate edge (default: 2.0).",
+    )
+    parser.add_argument(
         "-r", "--seed",
         type=int,
         default=None,
@@ -101,6 +118,8 @@ def main() -> None:
         n_orthologs=args.n_orthologs,
         gamma_shape=args.gamma_shape,
         branch_length=args.branch_length,
+        dup_boost_prob=args.dup_boost_prob,
+        dup_boost_factor=args.dup_boost_factor,
         seed=args.seed,
         out=args.out,
         msa_format=args.msa_format,

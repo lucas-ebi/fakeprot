@@ -97,6 +97,7 @@ def make_mutant(
     parent: Sequence,
     config: SimulationConfig,
     duplication: bool = False,
+    branch_length: float | None = None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, list[int]]:
     """
     Compute child sequence arrays from parent without committing to the store.
@@ -106,9 +107,10 @@ def make_mutant(
       2. row = store.add_row(chars, rates, pc)   — append child at that length
       3. child = Sequence(row, new_host, new_idx)
     """
+    t = branch_length if branch_length is not None else config.branch_length
     if duplication:
         residues, rates, stereo = _prepare_evolution_state(
-            store, parent, config, duplication=True
+            store, parent, config, duplication=True, branch_length=t
         )
         chars, rates_arr, pc_arr = encode_row(residues, rates, stereo)
     else:
@@ -116,12 +118,7 @@ def make_mutant(
         rates_arr = store.rates[parent.row]
         pc_arr = store.pc[parent.row]
 
-    return _apply_mutations_and_indels(
-        chars,
-        rates_arr,
-        pc_arr,
-        config,
-    )
+    return _apply_mutations_and_indels(chars, rates_arr, pc_arr, config, t)
 
 
 def apply_gaps(store: MsaStore, gaps: list[int]) -> int:
@@ -144,6 +141,7 @@ def _prepare_evolution_state(
     parent: Sequence,
     config: SimulationConfig,
     duplication: bool,
+    branch_length: float = 0.0,
 ) -> tuple[list[str], list[float], list[str | None]]:
     """
     Return (residues, rates, stereochemistry) ready for mutation.
@@ -169,7 +167,7 @@ def _prepare_evolution_state(
     new_stereo: list[str | None] = [stereo[0]]
     for i in range(1, len(residues)):
         rate = current_rates[i]
-        p_conserved = np.exp(-config.branch_length * rate)
+        p_conserved = np.exp(-branch_length * rate)
         if np.random.random() < p_conserved:
             if stereo[i] is None:
                 new_sc = np.random.choice(PHYSICOCHEMICAL_GROUPS, p=PC_FREQUENCIES)
@@ -295,6 +293,7 @@ def _apply_mutations_and_indels(
     rates: np.ndarray,
     pc: np.ndarray,
     config: SimulationConfig,
+    branch_length: float = 0.0,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, list[int]]:
     """
     Apply substitutions, deletions, insertions, and gap filling to encoded rows.
@@ -302,11 +301,16 @@ def _apply_mutations_and_indels(
     Deletion and substitution decisions are vectorised in bulk. Output assembly
     remains sequential because insertions can consume existing gap slots and
     may add new alignment columns.
+
+    Note: p_del and p_ins are still calibrated to config.branch_length. A boosted
+    duplicate edge therefore has elevated substitutions but unchanged indel probability.
+    This is a known inconsistency; making indel rates scale per-edge is left for a
+    future commit.
     """
     n = len(chars)
     p_del = config.p_del
     p_ins = config.p_ins
-    is_gap, deleted, will_mutate = _mutation_decisions(chars, rates, config.branch_length, p_del)
+    is_gap, deleted, will_mutate = _mutation_decisions(chars, rates, branch_length, p_del)
     new_chars = _apply_substitutions(chars, pc, will_mutate)
 
     out_chars: list[int] = []

@@ -74,6 +74,8 @@ fakeprot SIZE LENGTH [options]
 | `-n`, `--n-orthologs` | `1` | Target number of ortholog-group anchors. |
 | `-a`, `--shape` | `0.75` | Shape parameter $\alpha$ for the gamma site-rate model. Scale is fixed to $1/\alpha$ so that the mean rate equals 1, following the standard convention introduced by Yang (1994). |
 | `-b`, `--branch-length` | `0.05` | Expected substitutions per site on a branch of average rate. Controls overall sequence divergence; also scales the default $p_d$ and $p_i$. |
+| `--dup-boost-prob` | `0.5` | Probability that the duplicate's first edge is scaled by `--dup-boost-factor`. Set to 0 to disable post-duplication rate bursts. |
+| `--dup-boost-factor` | `2.0` | Branch-length multiplier applied to a boosted duplicate edge. |
 | `-r`, `--seed` | `None` | Random seed for reproducible simulations. |
 | `-f`, `--msa-format` | `fasta` | Alignment format: `fasta`, `clustal`, `nexus`, `phylip`, or `stockholm`. |
 | `-t`, `--tree-format` | `newick` | Tree format: `newick`, `nexus`, `nexml`, `phyloxml`, or `cdao`. |
@@ -367,6 +369,17 @@ If the retained or newly chosen class does not contain the current residue,
 FakeProt resamples the residue using the WAG probabilities restricted to the new
 class.
 
+Each duplication also stochastically modulates the new copy's divergence rate.
+With probability `--dup-boost-prob` (default 0.5) the duplicate's creation edge
+is assigned a branch length of $t \times \texttt{dup\_boost\_factor}$ instead of
+the global $t$. This models the burst of elevated substitution observed in the
+freed copy in the early post-duplication window (Ohno, 1970; Kellis et al., 2004;
+Conant & Wagner, 2003). The original copy's edge is not affected: only the
+duplicate is mutated at duplication time, so the boost is structurally asymmetric
+by design. Because branch lengths in the output gene tree are computed post-hoc
+as normalised Hamming distances, boosted duplicate edges are directly observable
+as longer-than-average edges in the emitted tree.
+
 ### Speciation
 
 Speciation replaces one extant species by two daughter species. Every paralog in
@@ -435,9 +448,12 @@ serialization use Biopython, and tabular outputs use pandas.
 FakeProt is a benchmark simulator rather than an inference-calibrated biological
 model. In particular:
 
-1. Branch lengths are a uniform global parameter: every gene-tree edge uses the
-   same `--branch-length` value $t$. Per-edge lengths — which would allow a
-   molecular clock or lineage-specific rate variation — are not yet supported.
+1. Branch lengths are partially per-edge: speciation edges use the global
+   `--branch-length` value $t$, while the duplicate's creation edge at each
+   duplication event is drawn independently according to `--dup-boost-prob` and
+   `--dup-boost-factor`. Per-edge lengths for speciation events — which would
+   allow a molecular clock or lineage-specific rate variation — are left as future
+   work.
 2. Branch lengths are post hoc normalized mismatch fractions, not parameters
    used to generate substitutions.
 3. Physicochemical classes overlap (Taylor, 1986), so class priors are

@@ -17,6 +17,8 @@ class SimulationConfig:
     n_orthologs: int = 1
     gamma_shape: float = 0.75
     branch_length: float = 0.05
+    dup_boost_prob: float = 0.5
+    dup_boost_factor: float = 2.0
     seed: int | None = None
     out: str = "fakeprot_out"
     msa_format: str = "fasta"

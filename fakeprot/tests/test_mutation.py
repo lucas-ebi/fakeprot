@@ -161,6 +161,31 @@ class TestMakeMutant:
         for aa in decode_chars(store.chars[child.row]):
             assert aa in valid
 
+    def test_explicit_branch_length_drives_substitution_rate(
+        self, simple_species: Species
+    ):
+        """Explicit branch_length overrides config and controls divergence."""
+        length = 200
+        residues = ["M"] + ["A"] * (length - 1)
+        rates = [0.0] + [1.0] * (length - 1)
+        chars, rates_arr, pc_arr = encode_row(residues, rates, [None] * length)
+        store = MsaStore(chars, rates_arr, pc_arr)
+        parent = Sequence(row=0, host=simple_species, idx=0)
+        # config.branch_length is 0.10 — deliberately between the two t values so that
+        # fallback to config would produce ~18% substitution for both, making 5× assert fail
+        cfg = SimulationConfig(size=10, length=length, branch_length=0.10,
+                               p_del=0.0, p_ins=0.0, seed=99)
+
+        def count_subs(t: float) -> int:
+            child_chars, _, _, _ = make_mutant(store, parent, cfg, branch_length=t)
+            return int((child_chars != chars).sum())
+
+        n = 300
+        mean_low  = np.mean([count_subs(0.01) for _ in range(n)])
+        mean_high = np.mean([count_subs(0.20) for _ in range(n)])
+        # 1 - exp(-0.20) ≈ 18 × (1 - exp(-0.01)); a 5× margin is very conservative
+        assert mean_high > 5 * mean_low
+
 
 class TestApplyGaps:
     def _make_store(self, seq_str: str, rates: list[float], stereo: list) -> MsaStore:
