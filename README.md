@@ -358,8 +358,7 @@ shift.
 
 For duplicated sequences, physicochemical constraints may also be relaxed or
 changed. Let $t_e$ denote the branch length of the creation edge — equal to
-$t \cdot \texttt{dup\_boost\_factor}$ for a boosted duplication, and $t$
-otherwise. Let $r_i'$ be the duplicate's redrawn site rate at position $i$.
+$t$ × `dup_boost_factor` for a boosted duplication, and $t$ otherwise. Let $r_i'$ be the duplicate's redrawn site rate at position $i$.
 If a parent site has class $c$, the duplicate first retains any constraint with
 probability $\exp(-t_e\,r_i')$. Conditional on retaining a constraint, the class
 is preserved with probability $\exp(-t_e\,r_i')$ or changed according to a
@@ -397,7 +396,7 @@ m(d) =
 
 where $d$ is the number of speciation steps separating the edge from the
 duplication node. At $d = 0$ (the duplicate's creation edge) the multiplier
-equals `dup_boost_factor` (default 2.0). At $d = \texttt{dup\_boost\_decay}$
+equals `dup_boost_factor` (default 2.0). At $d =$ `dup_boost_decay`
 (default 3.0) it has decayed by $1/e$. Setting `--dup-boost-decay 0` restricts
 the boost to the duplicate's creation edge only. This models the transient rate
 asymmetry between paralogs observed in the period immediately following
