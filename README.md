@@ -145,8 +145,9 @@ X_1 = \mathrm{M}, \qquad c_1 = \text{With sulfur}, \qquad r_1 = 0.
 ```
 
 For every other site $i$, FakeProt first decides whether the site has a
-physicochemical constraint using the same continuous-time survival probability
-applied along branches (see below), evaluated at the branch-length parameter $t$:
+physicochemical constraint using the same functional form as the substitution
+survival probability (see below), with $t$ acting as a tuning parameter for the
+proportion of constrained sites rather than as an actual edge length:
 
 ```math
 P(c_i \neq \varnothing) = \exp(-t\,r_i),
@@ -169,6 +170,9 @@ constraint $c_i$, deletion is considered first:
 ```math
 P(\mathrm{delete}\ i) = p_d\,r_i.
 ```
+
+When $p_d\,r_i > 1$ for a very high-rate site, deletion is certain (the product
+is implicitly clamped to 1 by comparison to a uniform draw).
 
 If the site is not deleted, the substitution probability is derived from the
 standard continuous-time Markov chain survival formula for a branch of length $t$
@@ -195,6 +199,9 @@ proposal is restricted to residues in $S_{c_i}$. Let
 ```math
 T_{x_i,c_i} = \sum_{a \in S_{c_i}} W_{x_i a}.
 ```
+
+(Since $W$ has zero diagonal entries, the sum implicitly excludes
+self-substitution even when $x_i \in S_{c_i}$.)
 
 When $T_{x_i,c_i} > 0$, the constrained substitution distribution is
 
@@ -350,25 +357,32 @@ relatively slow or fast in the duplicate, but the numerical rate scale may
 shift.
 
 For duplicated sequences, physicochemical constraints may also be relaxed or
-changed. If a parent site has class $c$, the duplicate first retains any
-constraint with probability $\exp(-t\,r_i)$. Conditional on retaining a
-constraint, the class is preserved with probability $\exp(-t\,r_i)$ or changed
-according to a class-level transition matrix $M$ derived by averaging WAG
-probabilities between the residues in each pair of physicochemical classes:
+changed. Let $t_e$ denote the branch length of the creation edge — equal to
+$t \cdot \texttt{dup\_boost\_factor}$ for a boosted duplication, and $t$
+otherwise. Let $r_i'$ be the duplicate's redrawn site rate at position $i$.
+If a parent site has class $c$, the duplicate first retains any constraint with
+probability $\exp(-t_e\,r_i')$. Conditional on retaining a constraint, the class
+is preserved with probability $\exp(-t_e\,r_i')$ or changed according to a
+class-level transition matrix $M$ derived by averaging WAG probabilities between
+the residues in each pair of physicochemical classes:
 
 ```math
-P(c_i' = c \mid c_i' \neq \varnothing, c_i=c) = \exp(-t\,r_i),
+P(c_i' = c \mid c_i' \neq \varnothing, c_i=c) = \exp(-t_e\,r_i'),
 ```
 
 ```math
 P(c_i' = d \mid c_i' \neq \varnothing, c_i=c) =
-\bigl(1 - \exp(-t\,r_i)\bigr)\,M_{cd},
+\bigl(1 - \exp(-t_e\,r_i')\bigr)\,M_{cd},
 \qquad d \neq c.
 ```
 
 If the retained or newly chosen class does not contain the current residue,
 FakeProt resamples the residue using the WAG probabilities restricted to the new
-class.
+class. Sites with no parent constraint ($c_i = \varnothing$) may also *acquire*
+a new class during duplication, sampled from the background prior
+$\text{Categorical}(\omega)$ with the same probability $\exp(-t_e\,r_i')$; if
+the current residue is not a member of the newly assigned class, it is likewise
+resampled.
 
 Each duplication also stochastically modulates the new copy's divergence rate.
 With probability `--dup-boost-prob` (default 0.5) the duplicate's creation edge
