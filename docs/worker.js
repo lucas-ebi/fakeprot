@@ -14,7 +14,13 @@
 
 importScripts('https://cdn.jsdelivr.net/pyodide/v0.27.0/full/pyodide.js');
 
-const BASE = 'https://raw.githubusercontent.com/lucas-ebi/fakeprot/main/fakeprot/';
+// On localhost serve files from the local project tree so changes are reflected
+// immediately without a GitHub push.  On any other host (e.g. GitHub Pages) fall
+// back to fetching from the published main branch.
+const BASE = (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
+  ? '../fakeprot/'
+  : 'https://raw.githubusercontent.com/lucas-ebi/fakeprot/main/fakeprot/';
+
 const FAKEPROT_FILES = [
   '__init__.py', 'config.py', 'substitution.py', 'simulation.py',
   'models/__init__.py', 'models/sequence.py', 'models/species.py', 'models/msa_store.py',
@@ -29,7 +35,7 @@ async function init() {
   pyodide = await loadPyodide();
 
   postMessage({type: 'status', msg: 'Installing packages…'});
-  await pyodide.loadPackage(['numpy', 'scipy', 'micropip']);
+  await pyodide.loadPackage(['numpy', 'micropip']);
   await pyodide.runPythonAsync(
     'import micropip\nawait micropip.install(["networkx","biopython"])'
   );
