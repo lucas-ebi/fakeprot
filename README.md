@@ -132,16 +132,29 @@ r_{i} \;\sim\; \Gamma\!\left(\alpha,\,\frac{1}{\alpha}\right),
 
 so the mean rate equals 1, following the standard phylogenetic convention
 (Yang, 1994). These rate values are then reordered by a local smoothing procedure
-(`wave_shuffle`): starting from a random site, each next site is chosen from the
-remaining values with probability proportional to
+(`wave_shuffle`). Each rate $r_i$ is first mapped to a normalised substitution
+probability
 
 ```math
-\max(0, 1 - |r_{\mathrm{previous}} - r_{\mathrm{candidate}}|).
+\hat{p}_i =
+\frac{1 - \exp(-t\,r_i)}{\max_j\bigl(1 - \exp(-t\,r_j)\bigr)},
 ```
 
-This preserves the marginal set of gamma-derived rates while encouraging
-neighboring sites to have similar mutability, an autocorrelation-along-sequence
-pattern motivated by hidden Markov models of rate variation
+so that all keys lie in $[0, 1]$ regardless of $t$. Starting from a random
+site, each next site is chosen from the remaining values with probability
+proportional to
+
+```math
+\max\bigl(0,\; 1 - |\hat{p}_{\mathrm{previous}} - \hat{p}_{\mathrm{candidate}}|\bigr).
+```
+
+The original gamma-derived rates are returned in the order determined by this
+traversal, so the marginal rate distribution is unchanged. Using normalised
+substitution probabilities as sort keys ensures the kernel has full dynamic range
+for any $t$ and places comparisons in a scale where differences correspond
+directly to differences in evolutionary variability — encouraging neighboring
+sites to have similar mutability, an autocorrelation-along-sequence pattern
+motivated by hidden Markov models of rate variation
 (Felsenstein & Churchill, 1996; see also Yang, 1995).
 
 ### Root Sequence
