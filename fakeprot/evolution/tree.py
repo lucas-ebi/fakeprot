@@ -20,7 +20,7 @@ from fakeprot.models.species import Species
 def build_msa(graph: nx.DiGraph, node: Sequence, store: MsaStore) -> list[SeqRecord]:
     """Collect leaf SeqRecord objects in tree traversal order."""
     return [
-        SeqRecord(Seq(decode_chars(store.chars[leaf.row])), id=str(leaf), description="")
+        SeqRecord(Seq(decode_chars(store.chars[leaf.row], store.is_ins)), id=str(leaf), description="")
         for leaf in collect_leaf_sequences(graph, node)
     ]
 

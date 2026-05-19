@@ -54,6 +54,7 @@ class MsaStore:
         self._chars[0] = chars
         self._rates[0] = rates
         self._pc[0]    = pc
+        self._is_ins = np.zeros(L, dtype=bool)
 
     # ------------------------------------------------------------------
     # Active-row views — shape[0] == committed rows, never capacity
@@ -78,6 +79,11 @@ class MsaStore:
     @property
     def length(self) -> int:
         return self._chars.shape[1]
+
+    @property
+    def is_ins(self) -> np.ndarray:
+        """Boolean mask over alignment columns: True = insertion column."""
+        return self._is_ins
 
     # ------------------------------------------------------------------
     # Mutation
@@ -120,6 +126,7 @@ class MsaStore:
         new_c = np.insert(self._chars[:n], positions, CHAR_GAP, axis=1)
         new_r = np.insert(self._rates[:n], positions, 1.0,      axis=1)
         new_p = np.insert(self._pc[:n],    positions, PC_NONE,  axis=1)
+        self._is_ins = np.insert(self._is_ins, positions, True)
         new_L = new_c.shape[1]
         full_c = np.empty((self._cap, new_L), dtype=np.uint8)
         full_r = np.empty((self._cap, new_L), dtype=np.float32)
@@ -155,9 +162,21 @@ class MsaStore:
 # ------------------------------------------------------------------
 
 
-def decode_chars(chars: np.ndarray) -> str:
-    """Convert a uint8 row to an amino acid / gap string."""
-    return _CHAR_BYTES[chars].tobytes().decode("ascii")
+def decode_chars(chars: np.ndarray, is_ins: np.ndarray | None = None) -> str:
+    """Convert a uint8 row to an amino acid / gap string (A2M format).
+
+    Match columns use uppercase residues and '-' for gaps.
+    Insertion columns (is_ins=True) use lowercase residues and '.' for absent positions.
+    """
+    result = bytearray(_CHAR_BYTES[chars].tobytes())
+    if is_ins is not None:
+        for i in np.where(is_ins)[0]:
+            b = result[i]
+            if 65 <= b <= 90:    # A–Z → a–z
+                result[i] = b + 32
+            elif b == 45:        # '-' → '.'
+                result[i] = 46
+    return result.decode("ascii")
 
 
 def decode_pc(pc_row: np.ndarray) -> list[str | None]:

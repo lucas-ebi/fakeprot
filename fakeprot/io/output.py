@@ -65,7 +65,7 @@ def _write_all_sequences(
         _write_fasta(path, store, collection)
         return
     alignment = MultipleSeqAlignment(
-        [SeqRecord(Seq(decode_chars(store.chars[seq.row])), id=str(seq), description="")
+        [SeqRecord(Seq(decode_chars(store.chars[seq.row], store.is_ins)), id=str(seq), description="")
          for seq in collection]
     )
     with open(path, "w") as fh:
@@ -138,7 +138,7 @@ def _write_ortholog_alignments(
             _write_fasta(path, store, members)
             continue
         alignment = MultipleSeqAlignment(
-            [SeqRecord(Seq(decode_chars(store.chars[seq.row])), id=str(seq), description="")
+            [SeqRecord(Seq(decode_chars(store.chars[seq.row], store.is_ins)), id=str(seq), description="")
              for seq in members]
         )
         with open(path, "w") as fh:
@@ -149,7 +149,7 @@ def _write_fasta(path: str, store: MsaStore, sequences: list[Sequence]) -> None:
     with open(path, "w") as fh:
         for seq in sequences:
             fh.write(f">{seq}\n")
-            fh.write(decode_chars(store.chars[seq.row]))
+            fh.write(decode_chars(store.chars[seq.row], store.is_ins))
             fh.write("\n")
 
 
