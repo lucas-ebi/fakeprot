@@ -154,8 +154,12 @@ async function runSimulation() {
   const p_del_raw   = document.getElementById('p_del').value.trim();
   const p_ins_raw   = document.getElementById('p_ins').value.trim();
   const seed_raw    = document.getElementById('seed').value.trim();
-  const msa_format  = document.getElementById('msa_format').value;
-  const tree_format = document.getElementById('tree_format').value;
+  const msa_format       = document.getElementById('msa_format').value;
+  const tree_format      = document.getElementById('tree_format').value;
+  const branch_length    = parseFloat(document.getElementById('branch_length').value);
+  const dup_boost_prob   = parseFloat(document.getElementById('dup_boost_prob').value);
+  const dup_boost_factor = parseFloat(document.getElementById('dup_boost_factor').value);
+  const dup_boost_decay  = parseFloat(document.getElementById('dup_boost_decay').value);
   const estimatedCells = size * length;
 
   if (estimatedCells > HARD_BROWSER_CELLS) {
@@ -173,6 +177,7 @@ async function runSimulation() {
   try {
     const config = {
       size, length, n_orthologs, gamma_shape, msa_format, tree_format,
+      branch_length, dup_boost_prob, dup_boost_factor, dup_boost_decay,
       p_del: p_del_raw ? parseFloat(p_del_raw) : 'None',
       p_ins: p_ins_raw ? parseFloat(p_ins_raw) : 'None',
       seed:  seed_raw  ? parseInt(seed_raw)    : 'None',
