@@ -17,8 +17,8 @@ ground truth is explicit: the species tree, gene tree, duplication history,
 ortholog groups, ancestral states, and column-wise constraints should all be
 recoverable. FakeProt implements a discrete, event-driven generator for protein
 families. Starting from a single ancestral protein, the simulator repeatedly
-selects an extant species, optionally creates a paralog by gene duplication, and
-then speciates the selected lineage into two daughter species. Sequence evolution
+selects an extant species, optionally creates a paralog by gene duplication
+(Ohno, 1970), and then speciates the selected lineage into two daughter species. Sequence evolution
 along every gene-tree edge combines WAG-derived amino-acid substitution
 probabilities (Whelan & Goldman, 2001), gamma-distributed site-rate
 heterogeneity (Yang, 1994), indel events, and probabilistic physicochemical
@@ -69,8 +69,8 @@ fakeprot SIZE LENGTH [options]
 | Option | Default | Meaning |
 | --- | --- | --- |
 | `-o`, `--out` | `fakeprot_out` | Prefix for all output files. |
-| `-d`, `--p-del` | derived | Per-branch per-site deletion probability $p_d$. Defaults to 5% of the mean site substitution rate (see below). |
-| `-i`, `--p-ins` | derived | Per-branch per-site insertion probability $p_i$. Defaults to 0.1% of the mean site substitution rate (see below). |
+| `-d`, `--p-del` | derived | Per-branch per-site deletion probability $p_d$. Defaults to 5% of the branch-length parameter (see below). |
+| `-i`, `--p-ins` | derived | Per-branch per-site insertion probability $p_i$. Defaults to 0.1% of the branch-length parameter (see below). |
 | `-n`, `--n-orthologs` | `1` | Target number of ortholog-group anchors. |
 | `-a`, `--shape` | `0.75` | Shape parameter $\alpha$ for the gamma site-rate model. Scale is fixed to $1/\alpha$ so that the mean rate equals 1, following the standard convention introduced by Yang (1994). |
 | `-b`, `--branch-length` | `0.05` | Expected substitutions per site on a branch of average rate. Controls overall sequence divergence; also scales the default $p_d$ and $p_i$. |
@@ -386,8 +386,9 @@ duplication node. At $d = 0$ (the duplicate's creation edge) the multiplier
 equals `dup_boost_factor` (default 2.0). At $d = \texttt{dup\_boost\_decay}$
 (default 3.0) it has decayed by $1/e$. Setting `--dup-boost-decay 0` restricts
 the boost to the duplicate's creation edge only. This models the transient rate
-asymmetry between paralogs observed in the first epoch after duplication (Ohno,
-1970; Lynch & Conery, 2000; Kellis et al., 2004). The original copy's lineage is
+asymmetry between paralogs observed in the period immediately following
+duplication (Ohno, 1970; Conant & Wagner, 2003; Lynch & Conery, 2000;
+Kellis et al., 2004). The original copy's lineage is
 unaffected. Because branch lengths in the output gene tree are computed post-hoc
 as normalised Hamming distances, the decaying boost appears as a fan of
 above-baseline edges in the duplicate's subtree, converging toward the global
@@ -466,8 +467,11 @@ model. In particular:
    `--dup-boost-factor`, and `--dup-boost-decay`; all other edges use the global
    `--branch-length`. Per-edge lengths for speciation events outside the boosted
    subtree are left as future work.
-2. Branch lengths are post hoc normalized mismatch fractions, not parameters
-   used to generate substitutions.
+2. The `--branch-length` parameter $t$ drives substitution probabilities via
+   $1 - \exp(-t\,r_i)$ during simulation. The branch lengths in the emitted gene
+   tree are separate post-hoc quantities: normalized Hamming distances between
+   parent and child rows, which reflect the observed divergence rather than the
+   generative $t$.
 3. Physicochemical classes overlap (Taylor, 1986), so class priors are
    normalized over class masses rather than over a partition of amino acids.
 4. The requested number of ortholog groups is a target, not a hard guarantee; if
@@ -475,6 +479,12 @@ model. In particular:
    simulator emits a warning.
 5. The requested size is a lower bound because one speciation event can add more
    than one sequence leaf.
+6. Indel probabilities use a discrete-time linear form ($p_d \cdot r_i$ for
+   deletions, $r_i \cdot p_i$ for insertions) rather than the continuous-time
+   exponential form used for substitutions. A boosted duplicate edge therefore
+   has elevated substitution rate but unchanged indel rate. Making indel
+   probabilities scale with the per-edge branch length is left for a future
+   version.
 
 These design choices make the simulator easy to inspect and useful for controlled
 benchmarking, but they should be considered when interpreting results as
@@ -492,13 +502,13 @@ pytest
 If you use FakeProt, please cite FakeProt itself and, where appropriate, the
 original sources of the models and concepts it implements.
 
-### Substitution model
+### Substitution Model
 
 > Whelan, S. and Goldman, N. (2001). A general empirical model of protein
 > evolution derived from multiple protein families using a maximum-likelihood
 > approach. *Molecular Biology and Evolution*, 18(5), 691–699.
 
-### Site-rate heterogeneity and rate autocorrelation
+### Site-Rate Heterogeneity and Rate Autocorrelation
 
 > Yang, Z. (1994). Maximum likelihood phylogenetic estimation from DNA
 > sequences with variable rates over sites: approximate methods.
@@ -511,12 +521,12 @@ original sources of the models and concepts it implements.
 > Yang, Z. (1995). A space-time process model for the evolution of DNA
 > sequences. *Genetics*, 139(2), 993–1005.
 
-### Physicochemical amino-acid classes
+### Physicochemical Amino-Acid Classes
 
 > Taylor, W. R. (1986). The classification of amino acid conservation.
 > *Journal of Theoretical Biology*, 119(2), 205–218.
 
-### Indel processes and gap length distributions
+### Indel Processes and Gap Length Distributions
 
 > Thorne, J. L., Kishino, H. and Felsenstein, J. (1991). An evolutionary
 > model for maximum likelihood alignment of DNA sequences.
@@ -531,7 +541,7 @@ original sources of the models and concepts it implements.
 > of gaps in protein sequence alignments. *Journal of Molecular Biology*,
 > 341(2), 617–631.
 
-### Yule (pure-birth) trees and their statistics
+### Yule (Pure-Birth) Trees and Their Statistics
 
 > Yule, G. U. (1925). A mathematical theory of evolution, based on the
 > conclusions of Dr. J. C. Willis, F.R.S. *Philosophical Transactions of
@@ -540,7 +550,7 @@ original sources of the models and concepts it implements.
 > Aldous, D. J. (2001). Stochastic models and descriptive statistics for
 > phylogenetic trees, from Yule to today. *Statistical Science*, 16(1), 23–34.
 
-### Orthology and paralogy
+### Orthology and Paralogy
 
 > Fitch, W. M. (1970). Distinguishing homologous from analogous proteins.
 > *Systematic Zoology*, 19(2), 99–113.
@@ -548,7 +558,21 @@ original sources of the models and concepts it implements.
 > Koonin, E. V. (2005). Orthologs, paralogs, and evolutionary genomics.
 > *Annual Review of Genetics*, 39, 309–338.
 
-### Protein-family database
+### Gene Duplication and Post-Duplication Rate Asymmetry
+
+> Ohno, S. (1970). *Evolution by Gene Duplication*. Springer-Verlag, Berlin.
+
+> Conant, G. C. and Wagner, A. (2003). Asymmetric sequence divergence of
+> duplicate genes. *Genome Research*, 13(9), 2052–2058.
+
+> Lynch, M. and Conery, J. S. (2000). The evolutionary fate and consequences
+> of duplicate genes. *Science*, 290(5494), 1151–1155.
+
+> Kellis, M., Birren, B. W. and Lander, E. S. (2004). Proof and evolutionary
+> analysis of ancient genome duplication in the yeast *Saccharomyces cerevisiae*.
+> *Nature*, 428(6983), 617–624.
+
+### Protein-Family Database
 
 > Finn, R. D., Mistry, J., Schuster-Böckler, B., Griffiths-Jones, S.,
 > Hollich, V., Lassmann, T., Moxon, S., Marshall, M., Khanna, A., Durbin, R.
