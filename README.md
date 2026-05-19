@@ -86,28 +86,36 @@ fakeprot SIZE LENGTH [options]
 ### Notation
 
 Let $A$ be the set of 20 canonical amino acids and let $\pi_a$ be the WAG
-background frequency of amino acid $a \in A$ (Whelan & Goldman, 2001). FakeProt
-stores the WAG empirical off-diagonal substitution probabilities in a
-row-stochastic matrix $W$, where $W_{ab}$ is the conditional probability of
-proposing residue $b$ from residue $a$, with $a \neq b$.
+equilibrium frequency of amino acid $a \in A$, and $s_{ab}$ the symmetric WAG
+exchangeability between $a$ and $b$ (Whelan & Goldman, 2001; values from PAML
+`dat/wag.dat`). FakeProt derives the row-stochastic conditional substitution
+matrix $W$ from these canonical parameters at initialisation:
+
+```math
+W_{ab} = \frac{s_{ab}\,\pi_b}{\displaystyle\sum_{k \neq a} s_{ak}\,\pi_k},
+\qquad a \neq b,
+```
+
+where $W_{ab}$ is the Gillespie conditional probability of proposing residue $b$
+given that residue $a$ undergoes a change. The diagonal is zero by construction.
 
 Let $C$ be the set of physicochemical classes used by the simulator. Each class
-$c \in C$ corresponds to a subset $S_c \subset A$; classes are allowed to
+$c \in C$ corresponds to a subset $A_c \subset A$; classes are allowed to
 overlap, following the Venn-diagram classification of amino-acid properties
 introduced by Taylor (1986). The class prior is proportional to the WAG
 background mass of its member residues:
 
 ```math
 \omega_c =
-\frac{\sum_{a \in S_c} \pi_a}
-     {\sum_{d \in C} \sum_{a \in S_d} \pi_a}.
+\frac{\sum_{a \in A_c} \pi_a}
+     {\sum_{d \in C} \sum_{a \in A_d} \pi_a}.
 ```
 
 The conditional amino-acid distribution inside class $c$ is
 
 ```math
 P(X=a \mid c) =
-\frac{\pi_a 1[a \in S_c]}{\sum_{b \in S_c} \pi_b}.
+\frac{\pi_a 1[a \in A_c]}{\sum_{b \in A_c} \pi_b}.
 ```
 
 ### Site-Rate Heterogeneity
@@ -194,14 +202,14 @@ P(X_i' = a) = \bigl(1 - \exp(-t\,r_i)\bigr)\,W_{x_i a}, \qquad a \neq x_i.
 ```
 
 If the site is constrained to physicochemical class $c_i$, the substitution
-proposal is restricted to residues in $S_{c_i}$. Let
+proposal is restricted to residues in $A_{c_i}$. Let
 
 ```math
-T_{x_i,c_i} = \sum_{a \in S_{c_i}} W_{x_i a}.
+T_{x_i,c_i} = \sum_{a \in A_{c_i}} W_{x_i a}.
 ```
 
 (Since $W$ has zero diagonal entries, the sum implicitly excludes
-self-substitution even when $x_i \in S_{c_i}$.)
+self-substitution even when $x_i \in A_{c_i}$.)
 
 When $T_{x_i,c_i} > 0$, the constrained substitution distribution is
 
@@ -212,7 +220,7 @@ P(X_i' = x_i) = \exp(-t\,r_i),
 ```math
 P(X_i' = a) =
 \bigl(1 - \exp(-t\,r_i)\bigr)\,\frac{W_{x_i a}}{T_{x_i,c_i}},
-\qquad a \in S_{c_i}.
+\qquad a \in A_{c_i}.
 ```
 
 If $T_{x_i,c_i} = 0$, the residue is retained. In all cases, gaps are treated as
