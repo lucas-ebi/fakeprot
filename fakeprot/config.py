@@ -45,4 +45,6 @@ class SimulationConfig:
             raise ValueError(
                 f"tree_format must be one of {sorted(VALID_TREE_FORMATS)}, got {self.tree_format!r}"
             )
+        if self.seed is None:
+            self.seed = int(np.random.randint(0, 2**31))
         np.random.seed(self.seed)
