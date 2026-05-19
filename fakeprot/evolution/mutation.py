@@ -5,7 +5,6 @@ Mutation, indel, and rate-distribution logic for sequence evolution.
 from __future__ import annotations
 
 import numpy as np
-from scipy.stats import gamma
 
 from fakeprot.config import SimulationConfig
 from fakeprot.models.msa_store import MsaStore, decode_chars, decode_pc, encode_row
@@ -89,11 +88,7 @@ def mutation_rate_distribution(
     else:
         shape = config.gamma_shape
 
-    scale = 1.0 / shape  # normalise mean to 1 (standard phylogenetic convention)
-    lo = gamma.ppf(0.01, shape, scale=scale)
-    hi = gamma.ppf(0.99, shape, scale=scale)
-    x = np.linspace(lo, hi, length - 1)
-    rates = np.clip(x / hi, 0.0, 1.0).tolist()
+    rates = np.random.gamma(shape, 1.0 / shape, size=length - 1).tolist()
     return [0.0] + wave_shuffle(rates)
 
 
@@ -174,12 +169,14 @@ def _prepare_evolution_state(
     new_stereo: list[str | None] = [stereo[0]]
     for i in range(1, len(residues)):
         rate = current_rates[i]
-        if np.random.random() < (1.0 - rate):
+        p_conserved = np.exp(-config.branch_length * rate)
+        if np.random.random() < p_conserved:
             if stereo[i] is None:
                 new_sc = np.random.choice(PHYSICOCHEMICAL_GROUPS, p=PC_FREQUENCIES)
             else:
-                p_sc = {k: rate * v for k, v in PC_SUBS_MATRIX[stereo[i]].items()}
-                p_sc[stereo[i]] = 1.0 - rate
+                p_change = 1.0 - p_conserved
+                p_sc = {k: p_change * v for k, v in PC_SUBS_MATRIX[stereo[i]].items()}
+                p_sc[stereo[i]] = p_conserved
                 keys = list(p_sc.keys())
                 vals = np.array(list(p_sc.values()))
                 new_sc = np.random.choice(keys, p=vals / vals.sum())
@@ -213,6 +210,7 @@ def _sample_gap_fill(pc_value: int) -> int:
 def _mutation_decisions(
     chars: np.ndarray,
     rates: np.ndarray,
+    branch_length: float,
     p_del: float,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Draw deletion and substitution masks for all non-gap sites."""
@@ -225,7 +223,8 @@ def _mutation_decisions(
 
     deleted = active & (rand_del < rates_f * p_del)
     surviving = active & ~deleted
-    will_mutate = surviving & (rand_sub >= 1.0 - rates_f)
+    p_mut = 1.0 - np.exp(-branch_length * rates_f)
+    will_mutate = surviving & (rand_sub < p_mut)
     return is_gap, deleted, will_mutate
 
 
@@ -307,7 +306,7 @@ def _apply_mutations_and_indels(
     n = len(chars)
     p_del = config.p_del
     p_ins = config.p_ins
-    is_gap, deleted, will_mutate = _mutation_decisions(chars, rates, p_del)
+    is_gap, deleted, will_mutate = _mutation_decisions(chars, rates, config.branch_length, p_del)
     new_chars = _apply_substitutions(chars, pc, will_mutate)
 
     out_chars: list[int] = []

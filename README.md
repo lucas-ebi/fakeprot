@@ -73,6 +73,7 @@ fakeprot SIZE LENGTH [options]
 | `-i`, `--p-ins` | derived | Per-branch per-site insertion probability $p_i$. Defaults to 0.1% of the mean site substitution rate (see below). |
 | `-n`, `--n-orthologs` | `1` | Target number of ortholog-group anchors. |
 | `-a`, `--shape` | `0.75` | Shape parameter $\alpha$ for the gamma site-rate model. Scale is fixed to $1/\alpha$ so that the mean rate equals 1, following the standard convention introduced by Yang (1994). |
+| `-b`, `--branch-length` | `0.05` | Expected substitutions per site on a branch of average rate. Controls overall sequence divergence; also scales the default $p_d$ and $p_i$. |
 | `-r`, `--seed` | `None` | Random seed for reproducible simulations. |
 | `-f`, `--msa-format` | `fasta` | Alignment format: `fasta`, `clustal`, `nexus`, `phylip`, or `stockholm`. |
 | `-t`, `--tree-format` | `newick` | Tree format: `newick`, `nexus`, `nexml`, `phyloxml`, or `cdao`. |
@@ -108,32 +109,18 @@ P(X=a \mid c) =
 
 ### Site-Rate Heterogeneity
 
-Given root length $L$, FakeProt assigns a site-specific mutation probability
-$r_i$ to every alignment site, following the discrete-gamma approach of
-Yang (1994). The first site is fixed at $r_1 = 0$ to preserve the initial
-methionine. For the remaining $L - 1$ sites, rates are drawn from a
-$\Gamma(\alpha,\,\beta)$ distribution with $\beta = 1/\alpha$ (so the mean rate
-equals 1, the standard phylogenetic convention). Specifically, $L-1$ evenly
-spaced quantile values are taken between the 1st and 99th percentiles:
+Given root length $L$, FakeProt assigns a site-specific relative rate
+$r_i$ to every alignment site. The first site is fixed at $r_1 = 0$ to
+preserve the initial methionine. For the remaining $L - 1$ sites, rates
+are drawn independently from
 
 ```math
-(x_1,\ldots,x_{L-1}) =
-\text{linspace}
-\left(
-F^{-1}_{\Gamma(\alpha,\,1/\alpha)}(0.01),\;
-F^{-1}_{\Gamma(\alpha,\,1/\alpha)}(0.99),\;
-L-1
-\right),
+r_{i} \;\sim\; \Gamma\!\left(\alpha,\,\frac{1}{\alpha}\right),
+\qquad i = 2,\ldots,L,
 ```
 
-and then normalised to $[0,1]$ by the 99th-percentile value $x_{L-1}$:
-
-```math
-r_{j+1} = \frac{x_j}{x_{L-1}},
-\qquad j = 1,\ldots,L-1.
-```
-
-These rate values are then reordered by a local smoothing procedure
+so the mean rate equals 1, following the standard phylogenetic convention
+(Yang, 1994). These rate values are then reordered by a local smoothing procedure
 (`wave_shuffle`): starting from a random site, each next site is chosen from the
 remaining values with probability proportional to
 
@@ -155,12 +142,13 @@ X_1 = \mathrm{M}, \qquad c_1 = \text{With sulfur}, \qquad r_1 = 0.
 ```
 
 For every other site $i$, FakeProt first decides whether the site has a
-physicochemical constraint:
+physicochemical constraint using the same continuous-time survival probability
+applied along branches (see below), evaluated at the branch-length parameter $t$:
 
 ```math
-P(c_i \neq \varnothing) = 1 - r_i,
+P(c_i \neq \varnothing) = \exp(-t\,r_i),
 \qquad
-P(c_i = \varnothing) = r_i.
+P(c_i = \varnothing) = 1 - \exp(-t\,r_i).
 ```
 
 If constrained, the class is drawn from
@@ -179,20 +167,27 @@ constraint $c_i$, deletion is considered first:
 P(\mathrm{delete}\ i) = p_d\,r_i.
 ```
 
-If the site is not deleted and has no physicochemical constraint, it is retained
-with probability $1 - r_i$; otherwise a new residue is sampled using the WAG row
-for the current residue (Whelan & Goldman, 2001):
+If the site is not deleted, the substitution probability is derived from the
+standard continuous-time Markov chain survival formula for a branch of length $t$
+at site rate $r_i$:
 
 ```math
-P(X_i' = x_i) = 1 - r_i,
+P(\text{substitution at site } i) = 1 - \exp(-t\,r_i).
+```
+
+If there is no physicochemical constraint, the new residue is sampled using the
+WAG conditional substitution matrix $W$ (Whelan & Goldman, 2001):
+
+```math
+P(X_i' = x_i) = \exp(-t\,r_i),
 ```
 
 ```math
-P(X_i' = a) = r_i W_{x_i a}, \qquad a \neq x_i.
+P(X_i' = a) = \bigl(1 - \exp(-t\,r_i)\bigr)\,W_{x_i a}, \qquad a \neq x_i.
 ```
 
-If the site is constrained to physicochemical class $c_i$, the mutation proposal
-is restricted to residues in $S_{c_i}$. Let
+If the site is constrained to physicochemical class $c_i$, the substitution
+proposal is restricted to residues in $S_{c_i}$. Let
 
 ```math
 T_{x_i,c_i} = \sum_{a \in S_{c_i}} W_{x_i a}.
@@ -201,12 +196,12 @@ T_{x_i,c_i} = \sum_{a \in S_{c_i}} W_{x_i a}.
 When $T_{x_i,c_i} > 0$, the constrained substitution distribution is
 
 ```math
-P(X_i' = x_i) = 1 - r_i,
+P(X_i' = x_i) = \exp(-t\,r_i),
 ```
 
 ```math
 P(X_i' = a) =
-r_i \frac{W_{x_i a}}{T_{x_i,c_i}},
+\bigl(1 - \exp(-t\,r_i)\bigr)\,\frac{W_{x_i a}}{T_{x_i,c_i}},
 \qquad a \in S_{c_i}.
 ```
 
@@ -224,7 +219,7 @@ per-branch, per-site probabilities $p_d$ (deletion) and $p_i$ (insertion).
 depth is $2(H_n - 1) \approx 2\ln n$, giving expected deletion gap fraction
 
 ```math
-f_d \;\approx\; \bar{r}\,p_d\,2\ln n.
+f_d \;\approx\; p_d\,2\ln n.
 ```
 
 **Insertions** in any one lineage create a new alignment column that appears
@@ -233,8 +228,12 @@ $n$-fold amplifying effect on total gap cells. The expected insertion gap
 fraction is
 
 ```math
-f_i \;\approx\; \frac{4n\,\bar{r}\,p_i}{1 + 4n\,\bar{r}\,p_i}.
+f_i \;\approx\; \frac{4n\,p_i}{1 + 4n\,p_i}.
 ```
+
+These formulas simplify to the above form because the gamma rates $r_i$ have
+mean 1 by construction (scale fixed to $1/\alpha$), so averaging over sites
+contributes a factor of 1.
 
 The likelihood that a gappy column with $k$ gaps was caused by a deletion
 versus an insertion can be assessed via the subtree-size distribution of a
@@ -250,31 +249,23 @@ Columns with few gaps ($k \ll n/2$) are predominantly deletions; columns with
 many gaps ($k \gg n/2$) are predominantly insertions. The crossover is at
 $k = n\,p_d/(p_d + p_i)$.
 
-Default values are calibrated to the mean per-branch substitution rate
-$\bar{r}$, defined as the mean of the linspace-normalised gamma quantiles:
-
-```math
-\bar{r} = \frac{F^{-1}_{\Gamma(\alpha,\,1/\alpha)}(0.01) + F^{-1}_{\Gamma(\alpha,\,1/\alpha)}(0.99)}
-               {2\,F^{-1}_{\Gamma(\alpha,\,1/\alpha)}(0.99)}.
-```
-
 The defaults are design choices tuned to produce realistic scaling behaviour
 rather than values read directly from any single empirical study:
 
 ```math
-p_d = 0.05\,\bar{r}, \qquad p_i = 0.001\,\bar{r}.
+p_d = 0.05\,t, \qquad p_i = 0.001\,t,
 ```
 
-The deletion coefficient (5% of the mean substitution rate) and insertion
-coefficient (0.1%) are not equal because each insertion in a single lineage
-creates a gap in every other sequence, amplifying its effect on total gap
-content by a factor of approximately $n$. As a result, gap content grows
-naturally with the number of sequences: deletion gaps accumulate as
-$O(\log n)$ (from tree depth) and insertion gaps as $O(n)$ (from the
-alignment-wide amplification). This matches the empirical observation, well known to practitioners working
-with large protein-family databases such as Pfam (Finn et al., 2006;
-Mistry et al., 2021), that larger and more diverged families are
-substantially gappier.
+where $t$ is the branch-length parameter (default 0.05). The deletion
+coefficient (5% of branch length) and insertion coefficient (0.1%) are not
+equal because each insertion in a single lineage creates a gap in every other
+sequence, amplifying its effect on total gap content by a factor of
+approximately $n$. As a result, gap content grows naturally with the number of
+sequences: deletion gaps accumulate as $O(\log n)$ (from tree depth) and
+insertion gaps as $O(n)$ (from the alignment-wide amplification). This matches
+the empirical observation, well known to practitioners working with large
+protein-family databases such as Pfam (Finn et al., 2006; Mistry et al.,
+2021), that larger and more diverged families are substantially gappier.
 
 After an undeleted non-gap site, FakeProt may introduce an insertion run using a
 two-stage model that decouples start probability from run length. This is a
@@ -357,17 +348,18 @@ shift.
 
 For duplicated sequences, physicochemical constraints may also be relaxed or
 changed. If a parent site has class $c$, the duplicate first retains any
-constraint with probability $1 - r_i$. Conditional on retaining a constraint,
-the class is preserved with probability $1 - r_i$ or changed according to a
-class-level transition matrix $M$ derived by averaging WAG probabilities between
-the residues in each pair of physicochemical classes:
+constraint with probability $\exp(-t\,r_i)$. Conditional on retaining a
+constraint, the class is preserved with probability $\exp(-t\,r_i)$ or changed
+according to a class-level transition matrix $M$ derived by averaging WAG
+probabilities between the residues in each pair of physicochemical classes:
 
 ```math
-P(c_i' = c \mid c_i' \neq \varnothing, c_i=c) = 1 - r_i,
+P(c_i' = c \mid c_i' \neq \varnothing, c_i=c) = \exp(-t\,r_i),
 ```
 
 ```math
-P(c_i' = d \mid c_i' \neq \varnothing, c_i=c) = r_i M_{cd},
+P(c_i' = d \mid c_i' \neq \varnothing, c_i=c) =
+\bigl(1 - \exp(-t\,r_i)\bigr)\,M_{cd},
 \qquad d \neq c.
 ```
 
@@ -443,9 +435,9 @@ serialization use Biopython, and tabular outputs use pandas.
 FakeProt is a benchmark simulator rather than an inference-calibrated biological
 model. In particular:
 
-1. Site-rate values are used directly as event probabilities after evaluating a
-   gamma density; they are not continuous-time branch-scaled rates in the sense
-   of a Yang (1994) discrete-gamma likelihood model.
+1. Branch lengths are a uniform global parameter: every gene-tree edge uses the
+   same `--branch-length` value $t$. Per-edge lengths — which would allow a
+   molecular clock or lineage-specific rate variation — are not yet supported.
 2. Branch lengths are post hoc normalized mismatch fractions, not parameters
    used to generate substitutions.
 3. Physicochemical classes overlap (Taylor, 1986), so class priors are

@@ -1,7 +1,6 @@
 from dataclasses import dataclass
 
 import numpy as np
-from scipy.stats import gamma as _gamma
 
 VALID_MSA_FORMATS = frozenset({"fasta", "clustal", "nexus", "phylip", "stockholm"})
 VALID_TREE_FORMATS = frozenset({"newick", "nexus", "nexml", "phyloxml", "cdao"})
@@ -17,26 +16,22 @@ class SimulationConfig:
     p_ins: float | None = None
     n_orthologs: int = 1
     gamma_shape: float = 0.75
+    branch_length: float = 0.05
     seed: int | None = None
     out: str = "fakeprot_out"
     msa_format: str = "fasta"
     tree_format: str = "newick"
 
     def __post_init__(self) -> None:
-        scale = 1.0 / self.gamma_shape
-        lo = _gamma.ppf(0.01, self.gamma_shape, scale=scale)
-        hi = _gamma.ppf(0.99, self.gamma_shape, scale=scale)
-        mean_r = (lo + hi) / (2.0 * hi)   # mean of linspace-normalised rates
         if self.p_del is None:
-            # Deletion rate = 5 % of mean substitution rate per branch (design default).
-            # Gap content from deletions grows naturally as O(log n) with tree depth.
-            self.p_del = 0.05 * mean_r
+            # Deletion rate = 5 % of branch_length (5 % of substitutions result in deletions).
+            self.p_del = 0.05 * self.branch_length
         if self.p_ins is None:
             # Per-lineage insertion rate ≈ 0.1 % of substitution rate.
             # Each insertion is amplified ~n-fold in the alignment (it creates a gap in
             # every other sequence), so this small coefficient already yields ~1 % insertion
             # gap content at n = 100, growing toward ~10 % at n = 1000.
-            self.p_ins = 0.001 * mean_r
+            self.p_ins = 0.001 * self.branch_length
         if self.msa_format not in VALID_MSA_FORMATS:
             raise ValueError(
                 f"msa_format must be one of {sorted(VALID_MSA_FORMATS)}, got {self.msa_format!r}"

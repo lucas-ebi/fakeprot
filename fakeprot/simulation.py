@@ -37,7 +37,7 @@ def run(config: SimulationConfig) -> None:
     sequence_tree: nx.DiGraph = nx.DiGraph()
 
     mutation_rates = mutation_rate_distribution(config.length, config)
-    root_chars, root_rates, root_pc = _generate_root_sequence(config.length, mutation_rates)
+    root_chars, root_rates, root_pc = _generate_root_sequence(config.length, mutation_rates, config.branch_length)
 
     store = MsaStore(root_chars, root_rates, root_pc)
     root_sequence = Sequence(row=0, host=root_species, idx=0)
@@ -97,6 +97,7 @@ def run(config: SimulationConfig) -> None:
 def _generate_root_sequence(
     length: int,
     mutation_rates: list[float],
+    branch_length: float,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Build the ancestral root sequence directly as numpy arrays.
@@ -114,7 +115,8 @@ def _generate_root_sequence(
 
     for i in range(1, length):
         rate = mutation_rates[i]
-        if np.random.random() < (1.0 - rate):
+        p_conserved = np.exp(-branch_length * rate)
+        if np.random.random() < p_conserved:
             sc = np.random.choice(PHYSICOCHEMICAL_GROUPS, p=PC_FREQUENCIES)
             pc[i] = PC_INDEX[sc]
             chars[i] = _sample_from_cdf(PC_AA_CDFS[sc])

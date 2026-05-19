@@ -62,6 +62,16 @@ def main() -> None:
         help="Shape parameter of the gamma distribution for site-rate variation (default: 0.75).",
     )
     parser.add_argument(
+        "-b", "--branch-length",
+        dest="branch_length",
+        type=float,
+        default=0.05,
+        help=(
+            "Expected substitutions per site on a branch of average rate (default: 0.05). "
+            "Controls overall sequence divergence; also scales the default --p-del and --p-ins."
+        ),
+    )
+    parser.add_argument(
         "-r", "--seed",
         type=int,
         default=None,
@@ -90,6 +100,7 @@ def main() -> None:
         p_ins=args.p_ins,
         n_orthologs=args.n_orthologs,
         gamma_shape=args.gamma_shape,
+        branch_length=args.branch_length,
         seed=args.seed,
         out=args.out,
         msa_format=args.msa_format,

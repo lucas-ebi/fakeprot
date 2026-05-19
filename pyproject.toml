@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "fakeprot"
-version = "0.2.0"
+version = "0.3.0"
 description = "Generate artificial protein families by simulating protein evolution."
 license = { text = "GPL-3.0-or-later" }
 authors = [{ name = "Lucas Carrijo de Oliveira", email = "lucas@ebi.ac.uk" }]
@@ -12,7 +12,6 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "numpy>=1.26",
-    "scipy>=1.12",
     "biopython>=1.83",
     "networkx>=3.2",
     "pandas>=2.2",
