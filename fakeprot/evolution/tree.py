@@ -7,7 +7,6 @@ from __future__ import annotations
 import string
 
 import networkx as nx
-import numpy as np
 from Bio.Phylo.BaseTree import Clade
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
@@ -38,36 +37,25 @@ def collect_leaf_sequences(graph: nx.DiGraph, node: Sequence) -> list[Sequence]:
     return leaves
 
 
-def get_branch_length(
-    graph: nx.DiGraph, node: Sequence, sequence_length: int, store: MsaStore
-) -> float | None:
-    """Branch length as the fraction of mismatched positions to the parent."""
+def get_branch_length(graph: nx.DiGraph, node: Sequence) -> float | None:
+    """Branch length as the generative parameter used to evolve this edge."""
     if graph.in_degree(node) == 0:
         return None
     parent = next(graph.predecessors(node))
-    return int(np.sum(store.chars[parent.row] != store.chars[node.row])) / sequence_length
+    return graph.edges[parent, node].get('branch_length')
 
 
-def build_gene_tree(
-    graph: nx.DiGraph, node: Sequence, sequence_length: int, store: MsaStore
-) -> Clade:
+def build_gene_tree(graph: nx.DiGraph, node: Sequence) -> Clade:
     """Recursively build a Clade tree from the sequence DAG, with branch lengths."""
     clades: list[Clade] = []
     for child in graph.successors(node):
         if graph.out_degree(child) == 0:
-            clades.append(
-                Clade(
-                    name=str(child),
-                    branch_length=get_branch_length(graph, child, sequence_length, store),
-                )
-            )
+            clades.append(Clade(name=str(child),
+                                branch_length=get_branch_length(graph, child)))
         else:
-            clades.append(build_gene_tree(graph, child, sequence_length, store))
-    return Clade(
-        name=str(node),
-        clades=clades,
-        branch_length=get_branch_length(graph, node, sequence_length, store),
-    )
+            clades.append(build_gene_tree(graph, child))
+    return Clade(name=str(node), clades=clades,
+                 branch_length=get_branch_length(graph, node))
 
 
 def build_species_tree(graph: nx.DiGraph, node: Species) -> Clade:

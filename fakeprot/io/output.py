@@ -48,7 +48,7 @@ def write_outputs(
 
     _write_all_sequences(config, store, collection)
     _write_current_sequences(config, store, sequence_tree, root_sequence)
-    _write_gene_tree(config, store, sequence_tree, root_sequence, sequence_length)
+    _write_gene_tree(config, sequence_tree, root_sequence)
     _write_species_cladogram(config, species_tree, root_species)
     _write_ortholog_groups_json(config, ortholog_groups, orthologs)
     if config.n_orthologs > 1:
@@ -90,12 +90,10 @@ def _write_current_sequences(
 
 def _write_gene_tree(
     config: SimulationConfig,
-    store: MsaStore,
     sequence_tree: nx.DiGraph,
     root_sequence: Sequence,
-    sequence_length: int,
 ) -> None:
-    root_clade = build_gene_tree(sequence_tree, root_sequence, sequence_length, store)
+    root_clade = build_gene_tree(sequence_tree, root_sequence)
     tree = Tree(root=root_clade, rooted=True)
     Phylo.write(tree, f"{config.out}_gene_tree.{config.tree_format}", config.tree_format)
 

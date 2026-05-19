@@ -173,7 +173,7 @@ def _do_speciation(
         sequence_length += n
         collection.append(child_a)
         daughter_a.paralogs.append(child_a)
-        sequence_tree.add_edge(paralog, child_a)
+        sequence_tree.add_edge(paralog, child_a, branch_length=t)
 
         child_b, n = store.commit_child(
             *make_mutant(store, paralog, config, branch_length=t), daughter_b, paralog_idx
@@ -182,7 +182,7 @@ def _do_speciation(
         sequence_length += n
         collection.append(child_b)
         daughter_b.paralogs.append(child_b)
-        sequence_tree.add_edge(paralog, child_b)
+        sequence_tree.add_edge(paralog, child_b, branch_length=t)
         leaf_delta += 2 - int(parent_was_leaf)
 
     species_tree.add_edge(parent, daughter_a)
@@ -237,6 +237,6 @@ def _do_gene_duplication(
     collection.append(duplicate)
     species.paralogs.append(duplicate)
     orthologs.append(duplicate)
-    sequence_tree.add_edge(source, duplicate)
+    sequence_tree.add_edge(source, duplicate, branch_length=dup_t)
 
     return sequence_length, 1 - int(source_was_leaf)

@@ -389,10 +389,9 @@ the boost to the duplicate's creation edge only. This models the transient rate
 asymmetry between paralogs observed in the period immediately following
 duplication (Ohno, 1970; Conant & Wagner, 2003; Lynch & Conery, 2000;
 Kellis et al., 2004). The original copy's lineage is
-unaffected. Because branch lengths in the output gene tree are computed post-hoc
-as normalised Hamming distances, the decaying boost appears as a fan of
-above-baseline edges in the duplicate's subtree, converging toward the global
-rate with increasing depth.
+unaffected. The boost is directly visible in the output gene tree: edges in the
+duplicate's subtree carry their elevated generative branch length, decaying
+toward the global rate with each subsequent speciation event.
 
 ### Speciation
 
@@ -419,17 +418,13 @@ ortholog group in the emitted CSV file.
 
 ### Branch Lengths
 
-Gene-tree branch lengths are computed after simulation as normalized Hamming
-distances between parent and child alignment rows:
-
-```math
-\ell(u,v) =
-\frac{1}{L^{*}}
-\sum_{i=1}^{L^{*}} 1[X_{u,i} \neq X_{v,i}],
-```
-
-where $L^{*}$ is the final alignment length, including inserted columns and gaps.
-The species cladogram is emitted without branch lengths.
+Gene-tree edge weights are the generative branch-length parameters recorded
+during simulation: the global `--branch-length` value $t$ for ordinary
+speciation edges, and $t \cdot m(d)$ for edges inside a boosted duplicate's
+subtree (where $m(d)$ is the post-duplication decay multiplier). Because these
+values are stored at the time of evolution rather than derived from the alignment
+after the fact, they constitute true ground-truth branch lengths for the
+simulated family. The species cladogram is emitted without branch lengths.
 
 ## Outputs
 
@@ -439,7 +434,7 @@ For output prefix `PREFIX`, FakeProt writes:
 | --- | --- |
 | `PREFIX_all_sequences.<msa-format>` | All generated sequences, including ancestral and internal sequence nodes. |
 | `PREFIX_current_sequences.<msa-format>` | Extant leaf sequences only. |
-| `PREFIX_gene_tree.<tree-format>` | Gene tree with normalized Hamming branch lengths. |
+| `PREFIX_gene_tree.<tree-format>` | Gene tree with generative (ground-truth) branch lengths. |
 | `PREFIX_species_cladogram.<tree-format>` | Species cladogram without branch lengths. |
 | `PREFIX_ortholog_groups.json` | Mapping from extant sequence identifiers to ortholog-group labels (`{"sp1_seq1": "OG_A", ...}`). |
 | `PREFIX_OG_A.<msa-format>`, `PREFIX_OG_B.<msa-format>`, ... | Per-ortholog-group alignments, emitted when `--n-orthologs > 1`. |
@@ -467,19 +462,14 @@ model. In particular:
    `--dup-boost-factor`, and `--dup-boost-decay`; all other edges use the global
    `--branch-length`. Per-edge lengths for speciation events outside the boosted
    subtree are left as future work.
-2. The `--branch-length` parameter $t$ drives substitution probabilities via
-   $1 - \exp(-t\,r_i)$ during simulation. The branch lengths in the emitted gene
-   tree are separate post-hoc quantities: normalized Hamming distances between
-   parent and child rows, which reflect the observed divergence rather than the
-   generative $t$.
-3. Physicochemical classes overlap (Taylor, 1986), so class priors are
+2. Physicochemical classes overlap (Taylor, 1986), so class priors are
    normalized over class masses rather than over a partition of amino acids.
-4. The requested number of ortholog groups is a target, not a hard guarantee; if
+3. The requested number of ortholog groups is a target, not a hard guarantee; if
    too few duplication opportunities occur before the leaf target is reached, the
    simulator emits a warning.
-5. The requested size is a lower bound because one speciation event can add more
+4. The requested size is a lower bound because one speciation event can add more
    than one sequence leaf.
-6. Indel probabilities use a discrete-time linear form ($p_d \cdot r_i$ for
+5. Indel probabilities use a discrete-time linear form ($p_d \cdot r_i$ for
    deletions, $r_i \cdot p_i$ for insertions) rather than the continuous-time
    exponential form used for substitutions. A boosted duplicate edge therefore
    has elevated substitution rate but unchanged indel rate. Making indel
