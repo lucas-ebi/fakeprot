@@ -131,6 +131,14 @@ def _sample_from_cdf(cdf: np.ndarray) -> int:
     return int(np.searchsorted(cdf, np.random.random(), side="right"))
 
 
+def _dup_edge_t(d: int | None, config: SimulationConfig) -> float:
+    """Branch length for an edge whose parent is d speciation steps from the last boosted duplication."""
+    if d is None or config.dup_boost_decay == 0.0:
+        return config.branch_length
+    m = 1.0 + (config.dup_boost_factor - 1.0) * np.exp(-(d + 1) / config.dup_boost_decay)
+    return config.branch_length * m
+
+
 def _do_speciation(
     store: MsaStore,
     parent: Species,
@@ -155,17 +163,22 @@ def _do_speciation(
             sequence_tree.has_node(paralog)
             and sequence_tree.out_degree(paralog) == 0
         )
+        t = _dup_edge_t(paralog.dist_to_last_dup, config)
+        next_d = paralog.dist_to_last_dup + 1 if paralog.dist_to_last_dup is not None else None
+
         child_a, n = store.commit_child(
-            *make_mutant(store, paralog, config), daughter_a, paralog_idx
+            *make_mutant(store, paralog, config, branch_length=t), daughter_a, paralog_idx
         )
+        child_a.dist_to_last_dup = next_d
         sequence_length += n
         collection.append(child_a)
         daughter_a.paralogs.append(child_a)
         sequence_tree.add_edge(paralog, child_a)
 
         child_b, n = store.commit_child(
-            *make_mutant(store, paralog, config), daughter_b, paralog_idx
+            *make_mutant(store, paralog, config, branch_length=t), daughter_b, paralog_idx
         )
+        child_b.dist_to_last_dup = next_d
         sequence_length += n
         collection.append(child_b)
         daughter_b.paralogs.append(child_b)
@@ -212,15 +225,14 @@ def _do_gene_duplication(
         and sequence_tree.out_degree(source) == 0
     )
 
-    dup_t = (
-        config.branch_length * config.dup_boost_factor
-        if np.random.random() < config.dup_boost_prob
-        else config.branch_length
-    )
+    boosted = np.random.random() < config.dup_boost_prob
+    dup_t = config.branch_length * config.dup_boost_factor if boosted else config.branch_length
     duplicate, n = store.commit_child(
         *make_mutant(store, source, config, duplication=True, branch_length=dup_t),
         species, new_idx,
     )
+    if boosted:
+        duplicate.dist_to_last_dup = 0
     sequence_length += n
     collection.append(duplicate)
     species.paralogs.append(duplicate)

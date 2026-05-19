@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "fakeprot"
-version = "0.4.0"
+version = "0.4.1"
 description = "Generate artificial protein families by simulating protein evolution."
 license = { text = "GPL-3.0-or-later" }
 authors = [{ name = "Lucas Carrijo de Oliveira", email = "lucas@ebi.ac.uk" }]

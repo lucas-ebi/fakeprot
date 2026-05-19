@@ -19,6 +19,7 @@ class SimulationConfig:
     branch_length: float = 0.05
     dup_boost_prob: float = 0.5
     dup_boost_factor: float = 2.0
+    dup_boost_decay: float = 3.0
     seed: int | None = None
     out: str = "fakeprot_out"
     msa_format: str = "fasta"

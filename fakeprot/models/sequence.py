@@ -14,6 +14,7 @@ class Sequence:
     row: int
     host: "Species"
     idx: int
+    dist_to_last_dup: int | None = None
 
     @property
     def label(self) -> str:

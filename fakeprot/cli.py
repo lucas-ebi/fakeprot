@@ -89,6 +89,17 @@ def main() -> None:
         help="Branch-length multiplier applied to a boosted duplicate edge (default: 2.0).",
     )
     parser.add_argument(
+        "--dup-boost-decay",
+        dest="dup_boost_decay",
+        type=float,
+        default=3.0,
+        help=(
+            "E-folding distance (in speciation steps) for the post-duplication rate boost "
+            "(default: 3.0). Set to 0 to restrict the boost to the duplicate's creation "
+            "edge only (v0.4.0 behaviour)."
+        ),
+    )
+    parser.add_argument(
         "-r", "--seed",
         type=int,
         default=None,
@@ -120,6 +131,7 @@ def main() -> None:
         branch_length=args.branch_length,
         dup_boost_prob=args.dup_boost_prob,
         dup_boost_factor=args.dup_boost_factor,
+        dup_boost_decay=args.dup_boost_decay,
         seed=args.seed,
         out=args.out,
         msa_format=args.msa_format,
