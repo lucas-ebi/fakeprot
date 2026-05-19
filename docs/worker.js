@@ -17,7 +17,12 @@ importScripts('https://cdn.jsdelivr.net/pyodide/v0.27.0/full/pyodide.js');
 // On localhost serve files from the local project tree so changes are reflected
 // immediately without a GitHub push.  On any other host (e.g. GitHub Pages) fall
 // back to fetching from the published main branch.
-const BASE = (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
+const BASE = (
+  location.hostname === 'localhost'  ||
+  location.hostname === '127.0.0.1' ||
+  location.hostname === '::1'        ||   // IPv6 loopback
+  location.hostname === '::'              // IPv6 any-address (python -m http.server default)
+)
   ? '../fakeprot/'
   : 'https://raw.githubusercontent.com/lucas-ebi/fakeprot/main/fakeprot/';
 
