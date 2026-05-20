@@ -41,18 +41,18 @@ def simple_store_and_seq(simple_species: Species) -> tuple[MsaStore, Sequence]:
 class TestWaveShuffle:
     def test_preserves_all_values(self):
         values = [0.1, 0.5, 0.3, 0.8, 0.2]
-        result = wave_shuffle(values)
+        result = wave_shuffle(values, branch_length=0.05)
         assert sorted(result) == pytest.approx(sorted(values))
 
     def test_output_length_matches_input(self):
-        values = list(range(10))
-        assert len(wave_shuffle(values)) == 10
+        values = [float(x) for x in range(10)]
+        assert len(wave_shuffle(values, branch_length=0.05)) == 10
 
     def test_single_element(self):
-        assert wave_shuffle([0.42]) == pytest.approx([0.42])
+        assert wave_shuffle([0.42], branch_length=0.05) == pytest.approx([0.42])
 
     def test_returns_list(self):
-        assert isinstance(wave_shuffle([1.0, 2.0]), list)
+        assert isinstance(wave_shuffle([1.0, 2.0], branch_length=0.05), list)
 
 
 class TestMutationRateDistribution:

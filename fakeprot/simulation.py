@@ -225,14 +225,12 @@ def _do_gene_duplication(
         and sequence_tree.out_degree(source) == 0
     )
 
-    boosted = np.random.random() < config.dup_boost_prob
-    dup_t = config.branch_length * config.dup_boost_factor if boosted else config.branch_length
+    dup_t = config.branch_length * config.dup_boost_factor
     duplicate, n = store.commit_child(
         *make_mutant(store, source, config, duplication=True, branch_length=dup_t),
         species, new_idx,
     )
-    if boosted:
-        duplicate.dist_to_last_dup = 0
+    duplicate.dist_to_last_dup = 0
     sequence_length += n
     collection.append(duplicate)
     species.paralogs.append(duplicate)

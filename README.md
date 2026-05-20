@@ -74,7 +74,6 @@ fakeprot SIZE LENGTH [options]
 | `-n`, `--n-orthologs` | `1` | Target number of ortholog-group anchors. |
 | `-a`, `--shape` | `0.75` | Shape parameter $\alpha$ for the gamma site-rate model. Scale is fixed to $1/\alpha$ so that the mean rate equals 1, following the standard convention introduced by Yang (1994). |
 | `-b`, `--branch-length` | `0.05` | Expected substitutions per site on a branch of average rate. Controls overall sequence divergence; also scales the default $p_d$ and $p_i$. |
-| `--dup-boost-prob` | `0.5` | Probability that the duplicate's first edge is scaled by `--dup-boost-factor`. Set to 0 to disable post-duplication rate bursts. |
 | `--dup-boost-factor` | `2.0` | Branch-length multiplier applied to a boosted duplicate edge. |
 | `--dup-boost-decay` | `3.0` | E-folding distance in speciation steps for the post-duplication rate burst. Set to 0 for a single-edge burst only. |
 | `-r`, `--seed` | `None` | Random seed for reproducible simulations. |
@@ -404,10 +403,9 @@ $\text{Categorical}(\omega)$ with the same probability $\exp(-t_e\,r_i')$; if
 the current residue is not a member of the newly assigned class, it is likewise
 resampled.
 
-Each duplication also stochastically modulates the new copy's divergence rate.
-With probability `--dup-boost-prob` (default 0.5) the duplicate's creation edge
-and its downstream lineage carry an elevated branch-length multiplier that decays
-exponentially with each subsequent speciation event:
+Each duplication modulates the new copy's divergence rate. The duplicate's
+creation edge and its downstream lineage carry an elevated branch-length
+multiplier that decays exponentially with each subsequent speciation event:
 
 ```math
 m(d) =
@@ -422,8 +420,7 @@ equals `dup_boost_factor` (default 2.0). At $d =$ `dup_boost_decay`
 the boost to the duplicate's creation edge only. This models the transient rate
 asymmetry between paralogs observed in the period immediately following
 duplication (Ohno, 1970; Conant & Wagner, 2003; Lynch & Conery, 2000;
-Kellis et al., 2004). The original copy's lineage is
-unaffected. The boost is directly visible in the output gene tree: edges in the
+Kellis et al., 2004). The boost is directly visible in the output gene tree: edges in the
 duplicate's subtree carry their elevated generative branch length, decaying
 toward the global rate with each subsequent speciation event.
 
