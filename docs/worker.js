@@ -85,6 +85,7 @@ try:
         n_orthologs=${cfg.n_orthologs},
         gamma_shape=${cfg.gamma_shape},
         branch_length=${cfg.branch_length},
+        branch_length_cv=${cfg.branch_length_cv},
         dup_boost_factor=${cfg.dup_boost_factor},
         dup_boost_decay=${cfg.dup_boost_decay},
         del_factor=${cfg.del_factor},

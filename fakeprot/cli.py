@@ -67,7 +67,7 @@ def main() -> None:
         type=float,
         default=0.05,
         help=(
-            "Expected substitutions per site on a branch of average rate (default: 0.05). "
+            "Average branch length: expected substitutions per site (default: 0.05). "
             "Controls overall sequence divergence; also scales the default --del-factor and --ins-factor."
         ),
     )
@@ -87,6 +87,17 @@ def main() -> None:
             "E-folding distance (in speciation steps) for the post-duplication rate boost "
             "(default: 3.0). Set to 0 to restrict the boost to the duplicate's creation "
             "edge only (v0.4.0 behaviour)."
+        ),
+    )
+    parser.add_argument(
+        "--branch-cv",
+        dest="branch_length_cv",
+        type=float,
+        default=0.4,
+        help=(
+            "Coefficient of variation for per-branch length noise (default: 0.4, "
+            "consistent with empirical relaxed-clock estimates; Drummond et al. 2006). "
+            "Set to 0 for deterministic (equal-length) branches."
         ),
     )
     parser.add_argument(
@@ -121,6 +132,7 @@ def main() -> None:
         branch_length=args.branch_length,
         dup_boost_factor=args.dup_boost_factor,
         dup_boost_decay=args.dup_boost_decay,
+        branch_length_cv=args.branch_length_cv,
         seed=args.seed,
         out=args.out,
         msa_format=args.msa_format,

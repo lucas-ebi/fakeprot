@@ -53,8 +53,12 @@
           </div>
           <div class="ctrl-label" style="margin-top:0.25rem">Gene duplication</div>
           <div class="field">
-            <label for="branch_length">Branch length <span class="hint">(expected substitutions per site)</span></label>
+            <label for="branch_length">Average branch length <span class="hint">(expected substitutions per site)</span></label>
             <input type="number" id="branch_length" value="0.05" min="0.001" step="0.001">
+          </div>
+          <div class="field">
+            <label for="branch_length_cv">Branch-length CV <span class="hint">(per-branch noise, 0 = none)</span></label>
+            <input type="number" id="branch_length_cv" value="0.4" min="0" max="2" step="0.05">
           </div>
           <div class="field">
             <label for="dup_boost_factor">Duplication boost factor <span class="hint">(branch-length multiplier)</span></label>

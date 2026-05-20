@@ -139,6 +139,14 @@ def _dup_edge_t(d: int | None, config: SimulationConfig) -> float:
     return config.branch_length * m
 
 
+def _jitter_branch_length(t: float, cv: float) -> float:
+    """Return t scaled by a mean-preserving log-normal draw (cv=0 → identity)."""
+    if cv == 0.0:
+        return t
+    sigma_log = np.sqrt(np.log(1.0 + cv * cv))
+    return float(t * np.exp(-0.5 * sigma_log ** 2 + sigma_log * np.random.normal()))
+
+
 def _do_speciation(
     store: MsaStore,
     parent: Species,
@@ -163,26 +171,28 @@ def _do_speciation(
             sequence_tree.has_node(paralog)
             and sequence_tree.out_degree(paralog) == 0
         )
-        t = _dup_edge_t(paralog.dist_to_last_dup, config)
+        t_mean = _dup_edge_t(paralog.dist_to_last_dup, config)
         next_d = paralog.dist_to_last_dup + 1 if paralog.dist_to_last_dup is not None else None
 
+        t_a = _jitter_branch_length(t_mean, config.branch_length_cv)
         child_a, n = store.commit_child(
-            *make_mutant(store, paralog, config, branch_length=t), daughter_a, paralog_idx
+            *make_mutant(store, paralog, config, branch_length=t_a), daughter_a, paralog_idx
         )
         child_a.dist_to_last_dup = next_d
         sequence_length += n
         collection.append(child_a)
         daughter_a.paralogs.append(child_a)
-        sequence_tree.add_edge(paralog, child_a, branch_length=t)
+        sequence_tree.add_edge(paralog, child_a, branch_length=t_a)
 
+        t_b = _jitter_branch_length(t_mean, config.branch_length_cv)
         child_b, n = store.commit_child(
-            *make_mutant(store, paralog, config, branch_length=t), daughter_b, paralog_idx
+            *make_mutant(store, paralog, config, branch_length=t_b), daughter_b, paralog_idx
         )
         child_b.dist_to_last_dup = next_d
         sequence_length += n
         collection.append(child_b)
         daughter_b.paralogs.append(child_b)
-        sequence_tree.add_edge(paralog, child_b, branch_length=t)
+        sequence_tree.add_edge(paralog, child_b, branch_length=t_b)
         leaf_delta += 2 - int(parent_was_leaf)
 
     species_tree.add_edge(parent, daughter_a)

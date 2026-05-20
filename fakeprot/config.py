@@ -17,6 +17,7 @@ class SimulationConfig:
     n_orthologs: int = 1
     gamma_shape: float = 0.75
     branch_length: float = 0.05
+    branch_length_cv: float = 0.4
     dup_boost_factor: float = 2.0
     dup_boost_decay: float = 3.0
     seed: int | None = None

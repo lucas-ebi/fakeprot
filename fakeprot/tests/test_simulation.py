@@ -1,9 +1,10 @@
 """Tests for simulation.py helpers."""
 
+import numpy as np
 import pytest
 
 from fakeprot.config import SimulationConfig
-from fakeprot.simulation import _dup_edge_t
+from fakeprot.simulation import _dup_edge_t, _jitter_branch_length
 
 
 @pytest.fixture
@@ -43,3 +44,23 @@ class TestDupEdgeT:
         t = _dup_edge_t(tau - 1, cfg)
         expected = cfg.branch_length * (1.0 + (cfg.dup_boost_factor - 1.0) * math.exp(-1.0))
         assert abs(t - expected) < 1e-10
+
+
+class TestJitterBranchLength:
+    def test_cv_zero_returns_exact_value(self):
+        assert _jitter_branch_length(0.05, 0.0) == pytest.approx(0.05)
+
+    def test_output_is_positive(self):
+        np.random.seed(0)
+        for _ in range(100):
+            assert _jitter_branch_length(0.05, 0.5) > 0.0
+
+    def test_mean_is_approximately_preserved(self):
+        np.random.seed(1)
+        samples = [_jitter_branch_length(0.05, 0.3) for _ in range(5000)]
+        assert np.mean(samples) == pytest.approx(0.05, rel=0.05)
+
+    def test_cv_is_approximately_correct(self):
+        np.random.seed(2)
+        samples = [_jitter_branch_length(1.0, 0.3) for _ in range(5000)]
+        assert np.std(samples) / np.mean(samples) == pytest.approx(0.3, rel=0.1)

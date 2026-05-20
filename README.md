@@ -76,6 +76,7 @@ fakeprot SIZE LENGTH [options]
 | `-b`, `--branch-length` | `0.05` | Expected substitutions per site on a branch of average rate. Controls overall sequence divergence; also scales the default $p_d$ and $p_i$. |
 | `--dup-boost-factor` | `2.0` | Branch-length multiplier applied to a boosted duplicate edge. |
 | `--dup-boost-decay` | `3.0` | E-folding distance in speciation steps for the post-duplication rate burst. Set to 0 for a single-edge burst only. |
+| `--branch-cv` | `0.4` | Coefficient of variation for per-branch stochastic rate noise (σ_log ≈ 0.39). Each speciation edge draws its length from a mean-preserving log-normal; `0` gives deterministic (equal-length) branches. Default chosen as the centre of the empirical range reported by Drummond et al. (2006). |
 | `-r`, `--seed` | `None` | Random seed for reproducible simulations. |
 | `-f`, `--msa-format` | `fasta` | Alignment format: `fasta`, `clustal`, `nexus`, `phylip`, or `stockholm`. |
 | `-t`, `--tree-format` | `newick` | Tree format: `newick`, `nexus`, `nexml`, `phyloxml`, or `cdao`. |
@@ -449,13 +450,14 @@ ortholog group in the emitted CSV file.
 
 ### Branch Lengths
 
-Gene-tree edge weights are the generative branch-length parameters recorded
-during simulation: the global `--branch-length` value $t$ for ordinary
-speciation edges, and $t \cdot m(d)$ for edges inside a boosted duplicate's
-subtree (where $m(d)$ is the post-duplication decay multiplier). Because these
-values are stored at the time of evolution rather than derived from the alignment
-after the fact, they constitute true ground-truth branch lengths for the
-simulated family. The species cladogram is emitted without branch lengths.
+Gene-tree edge weights are the generative branch-length values recorded at the
+time of evolution. For each speciation edge the realised length is drawn
+independently from a log-normal with mean $t$ (or $t \cdot m(d)$ inside a
+boosted duplicate's subtree) and coefficient of variation `--branch-cv`; with
+`--branch-cv 0` every edge uses the mean exactly. Because these values are
+stored during simulation rather than derived from the alignment after the fact,
+they constitute true ground-truth branch lengths for the simulated family.
+The species cladogram is emitted without branch lengths.
 
 ## Outputs
 
@@ -488,11 +490,12 @@ serialization use Biopython, and tabular outputs use pandas.
 FakeProt is a benchmark simulator rather than an inference-calibrated biological
 model. In particular:
 
-1. Branch lengths are partially per-edge: speciation edges inside the duplicate's
-   subtree carry a decaying multiplier controlled by `--dup-boost-prob`,
-   `--dup-boost-factor`, and `--dup-boost-decay`; all other edges use the global
-   `--branch-length`. Per-edge lengths for speciation events outside the boosted
-   subtree are left as future work.
+1. Indel probabilities use a discrete-time linear form ($p_d \cdot r_i$ for
+   deletions, $r_i \cdot p_i$ for insertions) rather than the continuous-time
+   exponential form used for substitutions. A boosted duplicate edge therefore
+   has elevated substitution rate but unchanged indel rate. Making indel
+   probabilities scale with the per-edge branch length is left for a future
+   version.
 2. Physicochemical classes overlap (Taylor, 1986), so class priors are
    normalized over class masses rather than over a partition of amino acids.
 3. The requested number of ortholog groups is a target, not a hard guarantee; if
@@ -500,12 +503,6 @@ model. In particular:
    simulator emits a warning.
 4. The requested size is a lower bound because one speciation event can add more
    than one sequence leaf.
-5. Indel probabilities use a discrete-time linear form ($p_d \cdot r_i$ for
-   deletions, $r_i \cdot p_i$ for insertions) rather than the continuous-time
-   exponential form used for substitutions. A boosted duplicate edge therefore
-   has elevated substitution rate but unchanged indel rate. Making indel
-   probabilities scale with the per-edge branch length is left for a future
-   version.
 
 These design choices make the simulator easy to inspect and useful for controlled
 benchmarking, but they should be considered when interpreting results as
@@ -534,11 +531,11 @@ original sources of the models and concepts it implements.
 > Yang, Z. (1994). Maximum likelihood phylogenetic estimation from DNA
 > sequences with variable rates over sites: approximate methods.
 > *Journal of Molecular Evolution*, 39(3), 306–314.
-
+>
 > Felsenstein, J. and Churchill, G. A. (1996). A Hidden Markov Model approach
 > to variation among sites in rate of evolution. *Molecular Biology and
 > Evolution*, 13(1), 93–104.
-
+>
 > Yang, Z. (1995). A space-time process model for the evolution of DNA
 > sequences. *Genetics*, 139(2), 993–1005.
 
@@ -552,11 +549,11 @@ original sources of the models and concepts it implements.
 > Thorne, J. L., Kishino, H. and Felsenstein, J. (1991). An evolutionary
 > model for maximum likelihood alignment of DNA sequences.
 > *Journal of Molecular Evolution*, 33(2), 114–124.
-
+>
 > Benner, S. A., Cohen, M. A. and Gonnet, G. H. (1993). Empirical and
 > structural models for insertions and deletions in the divergent evolution
 > of proteins. *Journal of Molecular Biology*, 229(4), 1065–1082.
-
+>
 > Chang, M. S. S. and Benner, S. A. (2004). Empirical analysis of protein
 > insertions and deletions determining parameters for the correct placement
 > of gaps in protein sequence alignments. *Journal of Molecular Biology*,
@@ -567,7 +564,7 @@ original sources of the models and concepts it implements.
 > Yule, G. U. (1925). A mathematical theory of evolution, based on the
 > conclusions of Dr. J. C. Willis, F.R.S. *Philosophical Transactions of
 > the Royal Society of London, Series B*, 213, 21–87.
-
+>
 > Aldous, D. J. (2001). Stochastic models and descriptive statistics for
 > phylogenetic trees, from Yule to today. *Statistical Science*, 16(1), 23–34.
 
@@ -575,20 +572,25 @@ original sources of the models and concepts it implements.
 
 > Fitch, W. M. (1970). Distinguishing homologous from analogous proteins.
 > *Systematic Zoology*, 19(2), 99–113.
-
+>
 > Koonin, E. V. (2005). Orthologs, paralogs, and evolutionary genomics.
 > *Annual Review of Genetics*, 39, 309–338.
+
+### Branch-Length Rate Variation
+
+> Drummond, A. J., Ho, S. Y. W., Phillips, M. J. and Rambaut, A. (2006).
+> Relaxed phylogenetics and dating with confidence. *PLoS Biology*, 4(5), e88.
 
 ### Gene Duplication and Post-Duplication Rate Asymmetry
 
 > Ohno, S. (1970). *Evolution by Gene Duplication*. Springer-Verlag, Berlin.
-
+>
 > Conant, G. C. and Wagner, A. (2003). Asymmetric sequence divergence of
 > duplicate genes. *Genome Research*, 13(9), 2052–2058.
-
+>
 > Lynch, M. and Conery, J. S. (2000). The evolutionary fate and consequences
 > of duplicate genes. *Science*, 290(5494), 1151–1155.
-
+>
 > Kellis, M., Birren, B. W. and Lander, E. S. (2004). Proof and evolutionary
 > analysis of ancient genome duplication in the yeast *Saccharomyces cerevisiae*.
 > *Nature*, 428(6983), 617–624.

@@ -157,6 +157,7 @@ async function runSimulation() {
   const msa_format       = document.getElementById('msa_format').value;
   const tree_format      = document.getElementById('tree_format').value;
   const branch_length    = parseFloat(document.getElementById('branch_length').value);
+  const branch_length_cv = parseFloat(document.getElementById('branch_length_cv').value);
   const dup_boost_factor = parseFloat(document.getElementById('dup_boost_factor').value);
   const dup_boost_decay  = parseFloat(document.getElementById('dup_boost_decay').value);
   const estimatedCells = size * length;
@@ -176,7 +177,7 @@ async function runSimulation() {
   try {
     const config = {
       size, length, n_orthologs, gamma_shape, msa_format, tree_format,
-      branch_length, dup_boost_factor, dup_boost_decay,
+      branch_length, branch_length_cv, dup_boost_factor, dup_boost_decay,
       del_factor,
       ins_factor,
       seed:  seed_raw  ? parseInt(seed_raw)    : 'None',
