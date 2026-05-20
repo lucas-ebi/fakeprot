@@ -28,14 +28,25 @@ from fakeprot.substitution import (
 ROOT_AMINO_ACID = "M"
 ROOT_PC_GROUP = "With sulfur"  # Met belongs to the sulfur group
 
-# Probability of extending an insertion run by one more residue.
-# Decoupled from p_ins so run length ~ Geometric(1 - P_INS_EXTEND), mean ≈ 2.
-P_INS_EXTEND = 0.5
-
 
 def _sample_from_cdf(cdf: np.ndarray) -> int:
     """Sample an index from a cumulative distribution."""
     return int(np.searchsorted(cdf, np.random.random(), side="right"))
+
+
+def _tkf92_beta(r: float, mu_t: float, lam_t: float, q: float) -> float:
+    """TKF92 probability that ≥1 insertion fragment starts after a position.
+
+    mu_t = μ·t and lam_t = λ·t are per-edge intensities (already include t).
+    r_f = lam_t·(1−q)·r is the per-site fragment birth intensity.
+    When μ_i ≈ r_f_i the L'Hôpital limit r_f/(1+r_f) is used.
+    """
+    r_f = lam_t * (1.0 - q) * r
+    mu = mu_t * r
+    diff = mu - r_f
+    if abs(diff) < 1e-12:
+        return r_f / (1.0 + r_f)
+    return r_f * (1.0 - np.exp(-diff)) / (mu - r_f * np.exp(-diff))
 
 
 def wave_shuffle(rates: list[float], branch_length: float) -> list[float]:
@@ -222,7 +233,7 @@ def _mutation_decisions(
     chars: np.ndarray,
     rates: np.ndarray,
     branch_length: float,
-    p_del: float,
+    mu_t: float,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Draw deletion and substitution masks for all non-gap sites."""
     rates_f = rates.astype(np.float64, copy=False)
@@ -232,7 +243,7 @@ def _mutation_decisions(
     rand_del = np.random.random(len(chars))
     rand_sub = np.random.random(len(chars))
 
-    deleted = active & (rand_del < rates_f * p_del)
+    deleted = active & (rand_del < 1.0 - np.exp(-rates_f * mu_t))
     surviving = active & ~deleted
     p_mut = 1.0 - np.exp(-branch_length * rates_f)
     will_mutate = surviving & (rand_sub < p_mut)
@@ -274,7 +285,9 @@ def _append_gap_run(
     end: int,
     rates: np.ndarray,
     pc: np.ndarray,
-    p_ins: float,
+    mu_t: float,
+    lam_t: float,
+    q: float,
     out_chars: list[int],
     out_rates: list[float],
     out_pc: list[int],
@@ -285,13 +298,13 @@ def _append_gap_run(
         if done:
             char = CHAR_GAP
         elif step == 0:
-            if np.random.random() < p_ins:
+            if np.random.random() < _tkf92_beta(float(rates[pos]), mu_t, lam_t, q):
                 char = _sample_gap_fill(int(pc[pos]))
             else:
                 char = CHAR_GAP
                 done = True
         else:
-            if np.random.random() < P_INS_EXTEND:
+            if np.random.random() < q:
                 char = _sample_gap_fill(int(pc[pos]))
             else:
                 char = CHAR_GAP
@@ -314,17 +327,25 @@ def _apply_mutations_and_indels(
     Deletion and substitution decisions are vectorised in bulk. Output assembly
     remains sequential because insertions can consume existing gap slots and
     may add new alignment columns.
-
-    Note: p_del and p_ins are still calibrated to config.branch_length. A boosted
-    duplicate edge therefore has elevated substitutions but unchanged indel probability.
-    This is a known inconsistency; making indel rates scale per-edge is left for a
-    future commit.
     """
     n = len(chars)
-    p_del = config.p_del
-    p_ins = config.p_ins
-    is_gap, deleted, will_mutate = _mutation_decisions(chars, rates, branch_length, p_del)
+    mu_t  = config.mu  * branch_length
+    lam_t = config.lam * branch_length
+    q     = config.q
+    is_gap, deleted, will_mutate = _mutation_decisions(chars, rates, branch_length, mu_t)
     new_chars = _apply_substitutions(chars, pc, will_mutate)
+
+    # TKF92 per-site fragment-start probabilities (vectorised)
+    rates_f = rates.astype(np.float64, copy=False)
+    r_f_arr = rates_f * lam_t * (1.0 - q)
+    mu_arr  = rates_f * mu_t
+    diff_arr = mu_arr - r_f_arr
+    nonzero = np.abs(diff_arr) > 1e-12
+    beta = np.where(
+        nonzero,
+        r_f_arr * (1.0 - np.exp(-diff_arr)) / np.where(nonzero, mu_arr - r_f_arr * np.exp(-diff_arr), 1.0),
+        r_f_arr / (1.0 + r_f_arr),
+    )
 
     out_chars: list[int] = []
     out_rates: list[float] = []
@@ -338,7 +359,7 @@ def _apply_mutations_and_indels(
             j = i + 1
             while j < n and chars[j] == CHAR_GAP:
                 j += 1
-            _append_gap_run(i, j, rates, pc, p_ins, out_chars, out_rates, out_pc)
+            _append_gap_run(i, j, rates, pc, mu_t, lam_t, q, out_chars, out_rates, out_pc)
             i = j
             continue
 
@@ -346,6 +367,23 @@ def _apply_mutations_and_indels(
             out_chars.append(CHAR_GAP)
             out_rates.append(float(rates[i]))
             out_pc.append(int(pc[i]))
+            # TKF92: ghost-lineage insertion — deletion does not suppress fragment birth
+            if np.random.random() < beta[i]:
+                out_chars.append(_sample_from_cdf(AA_FREQUENCY_CDF))
+                out_rates.append(1.0)
+                out_pc.append(PC_NONE)
+                if i + 1 < n and chars[i + 1] == CHAR_GAP:
+                    i += 1
+                else:
+                    gaps.append(i)
+                while np.random.random() < q:
+                    out_chars.append(_sample_from_cdf(AA_FREQUENCY_CDF))
+                    out_rates.append(1.0)
+                    out_pc.append(PC_NONE)
+                    if i + 1 < n and chars[i + 1] == CHAR_GAP:
+                        i += 1
+                    else:
+                        gaps.append(i)
             i += 1
             continue
 
@@ -353,8 +391,7 @@ def _apply_mutations_and_indels(
         out_rates.append(float(rates[i]))
         out_pc.append(int(pc[i]))
 
-        rate_i = float(rates[i])
-        if np.random.random() < rate_i * p_ins:
+        if np.random.random() < beta[i]:
             out_chars.append(_sample_from_cdf(AA_FREQUENCY_CDF))
             out_rates.append(1.0)
             out_pc.append(PC_NONE)
@@ -362,7 +399,7 @@ def _apply_mutations_and_indels(
                 i += 1
             else:
                 gaps.append(i)
-            while np.random.random() < P_INS_EXTEND:
+            while np.random.random() < q:
                 out_chars.append(_sample_from_cdf(AA_FREQUENCY_CDF))
                 out_rates.append(1.0)
                 out_pc.append(PC_NONE)

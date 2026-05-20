@@ -21,15 +21,19 @@ selects an extant species, optionally creates a paralog by gene duplication
 (Ohno, 1970), and then speciates the selected lineage into two daughter species. Sequence evolution
 along every gene-tree edge combines WAG-derived amino-acid substitution
 probabilities (Whelan & Goldman, 2001), gamma-distributed site-rate
-heterogeneity (Yang, 1994), indel events, and probabilistic physicochemical
+heterogeneity (Yang, 1994), a TKF92-compatible fragment indel model
+(Thorne, Kishino & Felsenstein, 1992), and probabilistic physicochemical
 constraints based on overlapping amino-acid property classes (Taylor, 1986).
 Insertions are represented as new alignment columns, while deletions are
 represented as gaps, so every emitted sequence remains in a common alignment.
 
-FakeProt is not intended to be a fully calibrated continuous-time model of
-protein evolution. Instead, it is a transparent benchmark generator whose
-parameters control sequence-family size, root length, indel frequency, site-rate
-heterogeneity, and the target number of ortholog groups.
+FakeProt is not intended to be a fully calibrated biological model of protein
+evolution. Its substitution and indel components follow continuous-time
+formulations (WAG CTMC, TKF92), but the physicochemical constraint scheme and
+rate parameters are not estimated from empirical data. It is a transparent
+benchmark generator whose parameters control sequence-family size, root length,
+indel frequency, site-rate heterogeneity, and the target number of ortholog
+groups.
 
 ## Installation
 
@@ -69,11 +73,12 @@ fakeprot SIZE LENGTH [options]
 | Option | Default | Meaning |
 | --- | --- | --- |
 | `-o`, `--out` | `fakeprot_out` | Prefix for all output files. |
-| `-d`, `--del-factor` | `0.05` | Deletion rate as a fraction of `--branch-length`; sets $p_d = \delta \cdot t$. |
-| `-i`, `--ins-factor` | `0.001` | Insertion rate as a fraction of `--branch-length`; sets $p_i = \iota \cdot t$. |
+| `-d`, `--mu` | `0.05` | TKF91/92 deletion rate $\mu$ per unit branch length; per-edge intensity $\mu \cdot t$. |
+| `-i`, `--lam` | `0.001` | TKF91/92 insertion rate $\lambda$ per unit branch length; per-edge intensity $\lambda \cdot t$. |
+| `--q` | `0.5` | TKF92 fragment extension probability $q$; geometric run-length parameter. Mean run length $= 1/(1-q)$. |
 | `-n`, `--n-orthologs` | `1` | Target number of ortholog-group anchors. |
-| `-a`, `--shape` | `0.75` | Shape parameter $\alpha$ for the gamma site-rate model. Scale is fixed to $1/\alpha$ so that the mean rate equals 1, following the standard convention introduced by Yang (1994). |
-| `-b`, `--branch-length` | `0.05` | Expected substitutions per site on a branch of average rate. Controls overall sequence divergence; also scales the default $p_d$ and $p_i$. |
+| `-a`, `--alpha` | `0.75` | Shape parameter $\alpha$ for the gamma site-rate model. Scale is fixed to $1/\alpha$ so that the mean rate equals 1, following the standard convention introduced by Yang (1994). |
+| `-b`, `--branch-length` | `0.05` | Expected substitutions per site on a branch of average rate. Controls overall sequence divergence; also scales the per-edge intensities $\mu \cdot t$ and $\lambda \cdot t$. |
 | `--dup-boost-factor` | `2.0` | Branch-length multiplier applied to a boosted duplicate edge. |
 | `--dup-boost-decay` | `3.0` | E-folding distance in speciation steps for the post-duplication rate burst. Set to 0 for a single-edge burst only. |
 | `--branch-cv` | `0.4` | Coefficient of variation for per-branch stochastic rate noise (σ_log ≈ 0.39). Each speciation edge draws its length from a mean-preserving log-normal; `0` gives deterministic (equal-length) branches. Default chosen as the centre of the empirical range reported by Drummond et al. (2006). |
@@ -88,16 +93,18 @@ fakeprot SIZE LENGTH [options]
 Let $A$ be the set of 20 canonical amino acids and let $\pi_a$ be the WAG
 equilibrium frequency of amino acid $a \in A$, and $s_{ab}$ the symmetric WAG
 exchangeability between $a$ and $b$ (Whelan & Goldman, 2001; values from PAML
-`dat/wag.dat`). FakeProt derives the row-stochastic conditional substitution
-matrix $W$ from these canonical parameters at initialisation:
+`dat/wag.dat`). The WAG rate matrix has off-diagonal entries $Q_{ab} = s_{ab}\,\pi_b$
+($a \neq b$), with diagonal set so rows sum to zero. FakeProt normalises these
+off-diagonal rates to obtain the row-stochastic Gillespie jump chain $W$:
 
 ```math
-W_{ab} = \frac{s_{ab}\,\pi_b}{\displaystyle\sum_{k \neq a} s_{ak}\,\pi_k},
+W_{ab} = \frac{Q_{ab}}{\displaystyle\sum_{k \neq a} Q_{ak}}
+       = \frac{s_{ab}\,\pi_b}{\displaystyle\sum_{k \neq a} s_{ak}\,\pi_k},
 \qquad a \neq b,
 ```
 
-where $W_{ab}$ is the Gillespie conditional probability of proposing residue $b$
-given that residue $a$ undergoes a change. The diagonal is zero by construction.
+where $W_{ab}$ is the conditional probability of proposing residue $b$ given
+that residue $a$ undergoes a change. The diagonal is zero by construction.
 
 Let $C$ be the set of physicochemical classes used by the simulator. Each class
 $c \in C$ corresponds to a subset $A_c \subset A$; classes are allowed to
@@ -189,11 +196,12 @@ to right. At a non-gap site with parent residue $x_i$, site rate $r_i$, and
 constraint $c_i$, deletion is considered first:
 
 ```math
-P(\mathrm{delete}\ i) = p_d\,r_i.
+P(\mathrm{delete}\ i) = 1 - \exp(-r_i\,\mu\,t),
 ```
 
-When $p_d\,r_i > 1$ for a very high-rate site, deletion is certain (the product
-is implicitly clamped to 1 by comparison to a uniform draw).
+where $\mu$ is `--mu` and $t$ is the per-edge branch length. This is
+the exact CTMC survival complement, consistent with the substitution formula
+below, and bounded in $[0, 1]$ for all $r_i$.
 
 If the site is not deleted, the substitution probability is derived from the
 standard continuous-time Markov chain survival formula for a branch of length $t$
@@ -243,14 +251,15 @@ process below.
 ### Insertions, Deletions, and Gap Filling
 
 Gaps in the final alignment arise from two distinct processes with separate
-per-branch, per-site probabilities $p_d$ (deletion) and $p_i$ (insertion).
+per-branch Poisson intensities $\mu\,t$ (deletion) and $\lambda\,t$
+(insertion), where $\mu$ (`--mu`) and $\lambda$ (`--lam`) are the TKF91/92 rate parameters.
 
 **Deletions** accumulate along each lineage's path from the root. For a Yule
 (pure-birth) tree with $n$ leaves (Yule, 1925; Aldous, 2001) the expected leaf
 depth is $2(H_n - 1) \approx 2\ln n$, giving expected deletion gap fraction
 
 ```math
-f_d \;\approx\; p_d\,2\ln n.
+f_d \;\approx\; \mu\,t\cdot 2\ln n.
 ```
 
 **Insertions** in any one lineage create a new alignment column that appears
@@ -259,7 +268,7 @@ $n$-fold amplifying effect on total gap cells. The expected insertion gap
 fraction is
 
 ```math
-f_i \;\approx\; \frac{4n\,p_i}{1 + 4n\,p_i}.
+f_i \;\approx\; \frac{4n\,\lambda\,t}{1 + 4n\,\lambda\,t}.
 ```
 
 These formulas simplify to the above form because the gamma rates $r_i$ have
@@ -273,23 +282,23 @@ Yule tree, which is approximately $P(\text{size}=s) \propto 1/s$
 
 ```math
 \frac{P(\text{deletion} \mid k)}{P(\text{insertion} \mid k)}
-= \frac{p_d}{p_i} \cdot \frac{n - k}{k}.
+= \frac{\mu}{\lambda} \cdot \frac{n - k}{k}.
 ```
 
 Columns with few gaps ($k \ll n/2$) are predominantly deletions; columns with
 many gaps ($k \gg n/2$) are predominantly insertions. The crossover is at
-$k = n\,p_d/(p_d + p_i)$.
+$k = n\,\mu/(\mu + \lambda)$.
 
 The defaults are design choices tuned to produce realistic scaling behaviour
 rather than values read directly from any single empirical study:
 
 ```math
-p_d = 0.05\,t, \qquad p_i = 0.001\,t,
+\mu = 0.05, \qquad \lambda = 0.001, \qquad q = 0.5,
 ```
 
-where $t$ is the branch-length parameter (default 0.05). The deletion
-coefficient (5% of branch length) and insertion coefficient (0.1%) are not
-equal because each insertion in a single lineage creates a gap in every other
+giving per-edge intensities $\mu\,t$ and $\lambda\,t$ at branch length $t$
+(default 0.05). The deletion coefficient (5% of branch length) and insertion
+coefficient (0.1%) are not equal because each insertion in a single lineage creates a gap in every other
 sequence, amplifying its effect on total gap content by a factor of
 approximately $n$. As a result, gap content grows naturally with the number of
 sequences: deletion gaps accumulate as $O(\log n)$ (from tree depth) and
@@ -298,23 +307,41 @@ the empirical observation, well known to practitioners working with large
 protein-family databases such as Pfam (Finn et al., 2006; Mistry et al.,
 2021), that larger and more diverged families are substantially gappier.
 
-After an undeleted non-gap site, FakeProt may introduce an insertion run using a
-two-stage model that decouples start probability from run length. This is a
-discrete-time analogue of the geometric-length indel model first formalised
-by Thorne, Kishino & Felsenstein (1991, the "TKF91" model). An insertion
-begins with probability
+After each non-gap site — whether the site survives or is deleted — FakeProt
+may introduce an insertion fragment using the TKF92 birth/death model
+(Thorne, Kishino & Felsenstein, 1992). This is a fragment generalisation of
+TKF91 (Thorne, Kishino & Felsenstein, 1991) in which insertions arrive as
+geometric-length runs rather than single residues.
+
+Let $\mu_i = r_i\,\mu\,t$ be the per-site death intensity and
+$r_{f,i} = r_i\,\lambda\,t\,(1-q)$ the per-site fragment birth intensity, where
+$q$ (`--q`, default 0.5) is the fragment extension probability. The
+TKF92 probability that at least one fragment is inserted after site $i$ is
 
 ```math
-P(\text{start insertion after site } i) = r_i\,p_i,
+\beta_i =
+\frac{r_{f,i}\bigl(1 - \exp(-(\mu_i - r_{f,i}))\bigr)}
+     {\mu_i - r_{f,i}\exp(-(\mu_i - r_{f,i}))},
 ```
 
-and, once started, each additional residue is appended with a fixed extension
-probability $p_{\text{ext}} = 0.5$, giving a geometrically distributed run
-length with mean $1/(1-p_{\text{ext}}) = 2$:
+with the limit $\beta_i = r_{f,i}/(1 + r_{f,i})$ when $\mu_i = r_{f,i}$.
+The process is subcritical (sequences do not grow without bound) whenever
+$r_{f,i} < \mu_i$, i.e. $\lambda\,(1-q) < \mu$, which holds under all
+reasonable defaults. Given that a fragment starts, each additional residue is
+appended with probability $q$:
 
 ```math
-P(\text{extend by one more} \mid \text{already inserting}) = p_{\text{ext}}.
+P(\text{extend by one more} \mid \text{already inserting}) = q.
 ```
+
+This gives a geometrically distributed run length with mean $1/(1-q) = 2$.
+Crucially, the expected total residues inserted after a rate-1 site is
+$\beta \cdot 1/(1-q) \approx \lambda\,t$, so `--lam` directly controls the
+per-unit-rate residue insertion intensity regardless of $q$.
+
+Deletions do not suppress fragment birth: a deleted position can still birth
+a fragment (a "ghost lineage" in TKF terminology), consistent with the
+continuous-time formulation.
 
 A geometric run-length distribution is a tractable approximation to the
 Zipfian (power-law) distribution empirically observed in real protein
@@ -328,8 +355,9 @@ alignment site, FakeProt inserts a gap in every previously generated row so
 that all sequences remain aligned.
 
 Existing gap runs can also be filled in descendant lineages. The first position
-in a gap run is filled with probability $p_i$; each subsequent position is filled
-with probability $p_{\text{ext}}$, independently. Filling stops after the first
+in a gap run is filled with the TKF92 probability $\beta_i$ (same formula as
+above, using the gap slot's own rate $r_i$); each subsequent position is filled
+with probability $q$, independently. Filling stops after the first
 failed attempt. Filled residues are sampled either from the WAG background
 distribution or, when the site has a physicochemical class, from the
 corresponding class-conditional distribution.
@@ -490,18 +518,12 @@ serialization use Biopython, and tabular outputs use pandas.
 FakeProt is a benchmark simulator rather than an inference-calibrated biological
 model. In particular:
 
-1. Indel probabilities use a discrete-time linear form ($p_d \cdot r_i$ for
-   deletions, $r_i \cdot p_i$ for insertions) rather than the continuous-time
-   exponential form used for substitutions. A boosted duplicate edge therefore
-   has elevated substitution rate but unchanged indel rate. Making indel
-   probabilities scale with the per-edge branch length is left for a future
-   version.
-2. Physicochemical classes overlap (Taylor, 1986), so class priors are
+1. Physicochemical classes overlap (Taylor, 1986), so class priors are
    normalized over class masses rather than over a partition of amino acids.
-3. The requested number of ortholog groups is a target, not a hard guarantee; if
+2. The requested number of ortholog groups is a target, not a hard guarantee; if
    too few duplication opportunities occur before the leaf target is reached, the
    simulator emits a warning.
-4. The requested size is a lower bound because one speciation event can add more
+3. The requested size is a lower bound because one speciation event can add more
    than one sequence leaf.
 
 These design choices make the simulator easy to inspect and useful for controlled
@@ -549,6 +571,10 @@ original sources of the models and concepts it implements.
 > Thorne, J. L., Kishino, H. and Felsenstein, J. (1991). An evolutionary
 > model for maximum likelihood alignment of DNA sequences.
 > *Journal of Molecular Evolution*, 33(2), 114–124.
+>
+> Thorne, J. L., Kishino, H. and Felsenstein, J. (1992). Inching toward
+> reality: an improved likelihood model of sequence evolution.
+> *Journal of Molecular Evolution*, 35(1), 3–16.
 >
 > Benner, S. A., Cohen, M. A. and Gonnet, G. H. (1993). Empirical and
 > structural models for insertions and deletions in the divergent evolution

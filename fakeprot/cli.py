@@ -34,18 +34,29 @@ def main() -> None:
         help="Prefix for all output filenames (default: fakeprot_out).",
     )
     parser.add_argument(
-        "-d", "--del-factor",
-        dest="del_factor",
+        "-d", "--mu",
+        dest="mu",
         type=float,
         default=0.05,
-        help="Deletion rate as a fraction of the branch-length parameter (default: 0.05).",
+        help="TKF91/92 deletion rate μ per unit branch length (default: 0.05).",
     )
     parser.add_argument(
-        "-i", "--ins-factor",
-        dest="ins_factor",
+        "-i", "--lam",
+        dest="lam",
         type=float,
         default=0.001,
-        help="Insertion rate as a fraction of the branch-length parameter (default: 0.001).",
+        help="TKF91/92 insertion rate λ per unit branch length (default: 0.001).",
+    )
+    parser.add_argument(
+        "--q",
+        dest="q",
+        type=float,
+        default=0.5,
+        metavar="Q",
+        help=(
+            "TKF92 fragment extension probability q: geometric run-length parameter "
+            "(0 = single-residue insertions only, default 0.5 → mean run length 2)."
+        ),
     )
     parser.add_argument(
         "-n", "--n-orthologs",
@@ -55,11 +66,11 @@ def main() -> None:
         help="Target number of ortholog groups (default: 1).",
     )
     parser.add_argument(
-        "-a", "--shape",
+        "-a", "--alpha",
         dest="gamma_shape",
         type=float,
         default=0.75,
-        help="Shape parameter of the gamma distribution for site-rate variation (default: 0.75).",
+        help="Gamma site-rate shape parameter α (default: 0.75).",
     )
     parser.add_argument(
         "-b", "--branch-length",
@@ -125,8 +136,9 @@ def main() -> None:
     config = SimulationConfig(
         size=args.size,
         length=args.length,
-        del_factor=args.del_factor,
-        ins_factor=args.ins_factor,
+        mu=args.mu,
+        lam=args.lam,
+        q=args.q,
         n_orthologs=args.n_orthologs,
         gamma_shape=args.gamma_shape,
         branch_length=args.branch_length,

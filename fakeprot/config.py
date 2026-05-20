@@ -12,8 +12,9 @@ class SimulationConfig:
 
     size: int
     length: int
-    del_factor: float = 0.05
-    ins_factor: float = 0.001
+    mu: float = 0.05
+    lam: float = 0.001
+    q: float = 0.5
     n_orthologs: int = 1
     gamma_shape: float = 0.75
     branch_length: float = 0.05
@@ -26,8 +27,6 @@ class SimulationConfig:
     tree_format: str = "newick"
 
     def __post_init__(self) -> None:
-        self.p_del = self.del_factor * self.branch_length
-        self.p_ins = self.ins_factor * self.branch_length
         if self.msa_format not in VALID_MSA_FORMATS:
             raise ValueError(
                 f"msa_format must be one of {sorted(VALID_MSA_FORMATS)}, got {self.msa_format!r}"

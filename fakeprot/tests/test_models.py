@@ -10,17 +10,15 @@ from fakeprot.models.species import Species
 
 
 class TestSimulationConfig:
-    def test_del_factor_ins_factor_default_to_positive_floats(self):
+    def test_mu_lam_default_to_positive_floats(self):
         config = SimulationConfig(size=50, length=100)
-        assert config.del_factor > 0.0
-        assert config.ins_factor > 0.0
+        assert config.mu > 0.0
+        assert config.lam > 0.0
 
-    def test_explicit_del_factor_ins_factor_preserved(self):
-        config = SimulationConfig(size=50, length=100, del_factor=0.1, ins_factor=0.005)
-        assert config.del_factor == pytest.approx(0.1)
-        assert config.ins_factor == pytest.approx(0.005)
-        assert config.p_del == pytest.approx(0.1 * config.branch_length)
-        assert config.p_ins == pytest.approx(0.005 * config.branch_length)
+    def test_explicit_mu_lam_preserved(self):
+        config = SimulationConfig(size=50, length=100, mu=0.1, lam=0.005)
+        assert config.mu == pytest.approx(0.1)
+        assert config.lam == pytest.approx(0.005)
 
     def test_invalid_msa_format_raises(self):
         with pytest.raises(ValueError, match="msa_format"):

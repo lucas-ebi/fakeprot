@@ -5,6 +5,7 @@ import pytest
 
 from fakeprot.config import SimulationConfig
 from fakeprot.evolution.mutation import (
+    _tkf92_beta,
     apply_gaps,
     make_mutant,
     mutation_rate_distribution,
@@ -89,7 +90,7 @@ class TestMakeMutant:
         chars, rates, pc = encode_row(residues, [0.0] * len(residues), [None] * len(residues))
         store = MsaStore(chars, rates, pc)
         parent = Sequence(row=0, host=simple_species, idx=0)
-        config = SimulationConfig(size=10, length=len(residues), del_factor=0.0, ins_factor=0.0, seed=3)
+        config = SimulationConfig(size=10, length=len(residues), mu=0.0, lam=0.0, seed=3)
 
         child_chars, child_rates, child_pc, gaps = make_mutant(store, parent, config)
 
@@ -130,7 +131,7 @@ class TestMakeMutant:
         chars, rates, pc = encode_row(list("MA--RN"), [0.2] * 6, [None] * 6)
         store = MsaStore(chars, rates, pc)
         parent = Sequence(row=0, host=simple_species, idx=0)
-        config = SimulationConfig(size=10, length=6, del_factor=0.0, ins_factor=0.0, seed=11)
+        config = SimulationConfig(size=10, length=6, mu=0.0, lam=0.0, seed=11)
 
         child_chars, child_rates, child_pc, gaps = make_mutant(store, parent, config)
 
@@ -144,7 +145,7 @@ class TestMakeMutant:
         self, simple_store_and_seq: tuple[MsaStore, Sequence]
     ):
         store, parent = simple_store_and_seq
-        config = SimulationConfig(size=10, length=20, del_factor=5.0, ins_factor=1.0, seed=13)
+        config = SimulationConfig(size=10, length=20, mu=5.0, lam=1.0, seed=13)
 
         child_chars, child_rates, child_pc, _ = make_mutant(store, parent, config)
 
@@ -161,6 +162,36 @@ class TestMakeMutant:
         for aa in decode_chars(store.chars[child.row]):
             assert aa in valid
 
+    def test_ghost_lineage_insertions_occur_at_deleted_positions(
+        self, simple_species: Species
+    ):
+        """With all sites deleted and high λ, ghost-lineage insertions must fire."""
+        residues = ["M"] + ["A"] * 9
+        chars, rates_arr, pc_arr = encode_row(residues, [0.0] + [1.0] * 9, [None] * 10)
+        store = MsaStore(chars, rates_arr, pc_arr)
+        parent = Sequence(row=0, host=simple_species, idx=0)
+        # μ large enough to delete all sites; λ large enough to insert
+        cfg = SimulationConfig(size=10, length=10, mu=100.0, lam=50.0, q=0.0, seed=7)
+        child_chars, _, _, _ = make_mutant(store, parent, cfg)
+        # At least one non-gap character must appear (ghost-lineage insertion)
+        from fakeprot.substitution import CHAR_GAP
+        assert (child_chars != CHAR_GAP).any()
+
+    def test_q_zero_gives_single_residue_insertions(
+        self, simple_species: Species
+    ):
+        """With q=0 no run of length >1 is ever produced."""
+        residues = ["M"] + ["A"] * 49
+        rates = [0.0] + [1.0] * 49
+        chars, rates_arr, pc_arr = encode_row(residues, rates, [None] * 50)
+        store = MsaStore(chars, rates_arr, pc_arr)
+        parent = Sequence(row=0, host=simple_species, idx=0)
+        cfg = SimulationConfig(size=10, length=50, mu=0.0, lam=5.0, q=0.0, seed=17)
+        np.random.seed(17)
+        child_chars, _, _, gaps = make_mutant(store, parent, cfg)
+        # Each position in gaps is unique (no two insertions at the same position)
+        assert len(gaps) == len(set(gaps))
+
     def test_explicit_branch_length_drives_substitution_rate(
         self, simple_species: Species
     ):
@@ -174,7 +205,7 @@ class TestMakeMutant:
         # config.branch_length is 0.10 — deliberately between the two t values so that
         # fallback to config would produce ~18% substitution for both, making 5× assert fail
         cfg = SimulationConfig(size=10, length=length, branch_length=0.10,
-                               del_factor=0.0, ins_factor=0.0, seed=99)
+                               mu=0.0, lam=0.0, seed=99)
 
         def count_subs(t: float) -> int:
             child_chars, _, _, _ = make_mutant(store, parent, cfg, branch_length=t)
@@ -185,6 +216,35 @@ class TestMakeMutant:
         mean_high = np.mean([count_subs(0.20) for _ in range(n)])
         # 1 - exp(-0.20) ≈ 18 × (1 - exp(-0.01)); a 5× margin is very conservative
         assert mean_high > 5 * mean_low
+
+
+class TestTkf92Beta:
+    def test_small_rates_linear_approx(self):
+        # For tiny intensities, β ≈ lam_t·(1−q)·r
+        r, mu_t, lam_t, q = 1.0, 1e-6, 1e-7, 0.5
+        expected = lam_t * (1.0 - q) * r
+        assert _tkf92_beta(r, mu_t, lam_t, q) == pytest.approx(expected, rel=1e-4)
+
+    def test_equal_rates_limit(self):
+        # When μ_i == r_f_i, use L'Hôpital: β = r_f/(1+r_f)
+        mu_t, q = 0.05, 0.0   # q=0 → r_f = lam_t·r
+        r, lam_t = 1.0, 0.05  # so μ·r = mu_t·r = r_f exactly
+        r_f = lam_t * (1.0 - q) * r
+        expected = r_f / (1.0 + r_f)
+        assert _tkf92_beta(r, mu_t, lam_t, q) == pytest.approx(expected, rel=1e-6)
+
+    def test_beta_bounded_between_zero_and_one(self):
+        for r in [0.0, 0.5, 1.0, 5.0]:
+            b = _tkf92_beta(r, mu_t=0.05, lam_t=0.001, q=0.5)
+            assert 0.0 <= b <= 1.0
+
+    def test_beta_zero_when_lam_zero(self):
+        assert _tkf92_beta(1.0, mu_t=0.05, lam_t=0.0, q=0.5) == pytest.approx(0.0)
+
+    def test_beta_increases_with_site_rate(self):
+        b_low  = _tkf92_beta(0.5, mu_t=0.1, lam_t=0.01, q=0.5)
+        b_high = _tkf92_beta(2.0, mu_t=0.1, lam_t=0.01, q=0.5)
+        assert b_high > b_low
 
 
 class TestApplyGaps:
