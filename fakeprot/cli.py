@@ -34,18 +34,18 @@ def main() -> None:
         help="Prefix for all output filenames (default: fakeprot_out).",
     )
     parser.add_argument(
-        "-d", "--p-del",
-        dest="p_del",
+        "-d", "--del-factor",
+        dest="del_factor",
         type=float,
-        default=None,
-        help="Per-branch per-site deletion probability (default: 5%% of mean site substitution rate).",
+        default=0.05,
+        help="Deletion rate as a fraction of the branch-length parameter (default: 0.05).",
     )
     parser.add_argument(
-        "-i", "--p-ins",
-        dest="p_ins",
+        "-i", "--ins-factor",
+        dest="ins_factor",
         type=float,
-        default=None,
-        help="Per-branch per-site insertion probability (default: 0.1%% of mean site substitution rate).",
+        default=0.001,
+        help="Insertion rate as a fraction of the branch-length parameter (default: 0.001).",
     )
     parser.add_argument(
         "-n", "--n-orthologs",
@@ -68,7 +68,7 @@ def main() -> None:
         default=0.05,
         help=(
             "Expected substitutions per site on a branch of average rate (default: 0.05). "
-            "Controls overall sequence divergence; also scales the default --p-del and --p-ins."
+            "Controls overall sequence divergence; also scales the default --del-factor and --ins-factor."
         ),
     )
     parser.add_argument(
@@ -114,8 +114,8 @@ def main() -> None:
     config = SimulationConfig(
         size=args.size,
         length=args.length,
-        p_del=args.p_del,
-        p_ins=args.p_ins,
+        del_factor=args.del_factor,
+        ins_factor=args.ins_factor,
         n_orthologs=args.n_orthologs,
         gamma_shape=args.gamma_shape,
         branch_length=args.branch_length,

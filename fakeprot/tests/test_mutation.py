@@ -89,7 +89,7 @@ class TestMakeMutant:
         chars, rates, pc = encode_row(residues, [0.0] * len(residues), [None] * len(residues))
         store = MsaStore(chars, rates, pc)
         parent = Sequence(row=0, host=simple_species, idx=0)
-        config = SimulationConfig(size=10, length=len(residues), p_del=0.0, p_ins=0.0, seed=3)
+        config = SimulationConfig(size=10, length=len(residues), del_factor=0.0, ins_factor=0.0, seed=3)
 
         child_chars, child_rates, child_pc, gaps = make_mutant(store, parent, config)
 
@@ -130,7 +130,7 @@ class TestMakeMutant:
         chars, rates, pc = encode_row(list("MA--RN"), [0.2] * 6, [None] * 6)
         store = MsaStore(chars, rates, pc)
         parent = Sequence(row=0, host=simple_species, idx=0)
-        config = SimulationConfig(size=10, length=6, p_del=0.0, p_ins=0.0, seed=11)
+        config = SimulationConfig(size=10, length=6, del_factor=0.0, ins_factor=0.0, seed=11)
 
         child_chars, child_rates, child_pc, gaps = make_mutant(store, parent, config)
 
@@ -144,7 +144,7 @@ class TestMakeMutant:
         self, simple_store_and_seq: tuple[MsaStore, Sequence]
     ):
         store, parent = simple_store_and_seq
-        config = SimulationConfig(size=10, length=20, p_del=0.25, p_ins=0.05, seed=13)
+        config = SimulationConfig(size=10, length=20, del_factor=5.0, ins_factor=1.0, seed=13)
 
         child_chars, child_rates, child_pc, _ = make_mutant(store, parent, config)
 
@@ -174,7 +174,7 @@ class TestMakeMutant:
         # config.branch_length is 0.10 — deliberately between the two t values so that
         # fallback to config would produce ~18% substitution for both, making 5× assert fail
         cfg = SimulationConfig(size=10, length=length, branch_length=0.10,
-                               p_del=0.0, p_ins=0.0, seed=99)
+                               del_factor=0.0, ins_factor=0.0, seed=99)
 
         def count_subs(t: float) -> int:
             child_chars, _, _, _ = make_mutant(store, parent, cfg, branch_length=t)

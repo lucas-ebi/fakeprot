@@ -69,8 +69,8 @@ fakeprot SIZE LENGTH [options]
 | Option | Default | Meaning |
 | --- | --- | --- |
 | `-o`, `--out` | `fakeprot_out` | Prefix for all output files. |
-| `-d`, `--p-del` | derived | Per-branch per-site deletion probability $p_d$. Defaults to 5% of the branch-length parameter (see below). |
-| `-i`, `--p-ins` | derived | Per-branch per-site insertion probability $p_i$. Defaults to 0.1% of the branch-length parameter (see below). |
+| `-d`, `--del-factor` | `0.05` | Deletion rate as a fraction of `--branch-length`; sets $p_d = \delta \cdot t$. |
+| `-i`, `--ins-factor` | `0.001` | Insertion rate as a fraction of `--branch-length`; sets $p_i = \iota \cdot t$. |
 | `-n`, `--n-orthologs` | `1` | Target number of ortholog-group anchors. |
 | `-a`, `--shape` | `0.75` | Shape parameter $\alpha$ for the gamma site-rate model. Scale is fixed to $1/\alpha$ so that the mean rate equals 1, following the standard convention introduced by Yang (1994). |
 | `-b`, `--branch-length` | `0.05` | Expected substitutions per site on a branch of average rate. Controls overall sequence divergence; also scales the default $p_d$ and $p_i$. |

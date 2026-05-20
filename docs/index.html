@@ -44,12 +44,12 @@
             <input type="number" id="gamma_shape" value="0.75" min="0.1" step="0.05">
           </div>
           <div class="field">
-            <label for="p_del">Deletion probability <span class="hint">(per branch, per site)</span></label>
-            <input type="number" id="p_del" placeholder="auto" min="0" max="1" step="0.0001">
+            <label for="del_factor">Deletion factor <span class="hint">(fraction of branch length)</span></label>
+            <input type="number" id="del_factor" value="0.05" min="0" step="0.001">
           </div>
           <div class="field">
-            <label for="p_ins">Insertion probability <span class="hint">(per branch, per site)</span></label>
-            <input type="number" id="p_ins" placeholder="auto" min="0" max="1" step="0.0001">
+            <label for="ins_factor">Insertion factor <span class="hint">(fraction of branch length)</span></label>
+            <input type="number" id="ins_factor" value="0.001" min="0" step="0.0001">
           </div>
           <div class="ctrl-label" style="margin-top:0.25rem">Gene duplication</div>
           <div class="field">

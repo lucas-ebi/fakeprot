@@ -151,8 +151,8 @@ async function runSimulation() {
   const length      = parseInt(document.getElementById('length').value);
   const n_orthologs = parseInt(document.getElementById('n_orthologs').value);
   const gamma_shape = parseFloat(document.getElementById('gamma_shape').value);
-  const p_del_raw   = document.getElementById('p_del').value.trim();
-  const p_ins_raw   = document.getElementById('p_ins').value.trim();
+  const del_factor  = parseFloat(document.getElementById('del_factor').value);
+  const ins_factor  = parseFloat(document.getElementById('ins_factor').value);
   const seed_raw    = document.getElementById('seed').value.trim();
   const msa_format       = document.getElementById('msa_format').value;
   const tree_format      = document.getElementById('tree_format').value;
@@ -177,8 +177,8 @@ async function runSimulation() {
     const config = {
       size, length, n_orthologs, gamma_shape, msa_format, tree_format,
       branch_length, dup_boost_factor, dup_boost_decay,
-      p_del: p_del_raw ? parseFloat(p_del_raw) : 'None',
-      p_ins: p_ins_raw ? parseFloat(p_ins_raw) : 'None',
+      del_factor,
+      ins_factor,
       seed:  seed_raw  ? parseInt(seed_raw)    : 'None',
     };
     const {filenames: files, warnings} = await workerRequest({type: 'run', config});

@@ -12,8 +12,8 @@ class SimulationConfig:
 
     size: int
     length: int
-    p_del: float | None = None
-    p_ins: float | None = None
+    del_factor: float = 0.05
+    ins_factor: float = 0.001
     n_orthologs: int = 1
     gamma_shape: float = 0.75
     branch_length: float = 0.05
@@ -25,15 +25,8 @@ class SimulationConfig:
     tree_format: str = "newick"
 
     def __post_init__(self) -> None:
-        if self.p_del is None:
-            # Deletion rate = 5 % of branch_length (5 % of substitutions result in deletions).
-            self.p_del = 0.05 * self.branch_length
-        if self.p_ins is None:
-            # Per-lineage insertion rate ≈ 0.1 % of substitution rate.
-            # Each insertion is amplified ~n-fold in the alignment (it creates a gap in
-            # every other sequence), so this small coefficient already yields ~1 % insertion
-            # gap content at n = 100, growing toward ~10 % at n = 1000.
-            self.p_ins = 0.001 * self.branch_length
+        self.p_del = self.del_factor * self.branch_length
+        self.p_ins = self.ins_factor * self.branch_length
         if self.msa_format not in VALID_MSA_FORMATS:
             raise ValueError(
                 f"msa_format must be one of {sorted(VALID_MSA_FORMATS)}, got {self.msa_format!r}"
