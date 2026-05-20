@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timezone
+from importlib.metadata import version as _pkg_version, PackageNotFoundError
 
 import networkx as nx
 from Bio import AlignIO, Phylo
@@ -28,8 +29,10 @@ from fakeprot.models.sequence import Sequence
 from fakeprot.models.species import Species
 from fakeprot.substitution import AMINO_ACIDS, CHAR_GAP, PHYSICOCHEMICAL_GROUPS
 
-# fakeprot version — keep in sync with pyproject.toml
-_VERSION = "0.2.0"
+try:
+    _VERSION = _pkg_version("fakeprot")
+except PackageNotFoundError:
+    _VERSION = "unknown"
 
 
 def write_outputs(
@@ -192,7 +195,7 @@ def _write_run_info(config: SimulationConfig) -> None:
             "size": config.size,
             "length": config.length,
             "n_orthologs": config.n_orthologs,
-            "gamma_shape": config.gamma_shape,
+            "alpha": config.gamma_shape,
             "branch_length": config.branch_length,
             "branch_length_cv": config.branch_length_cv,
             "mu": config.mu,
