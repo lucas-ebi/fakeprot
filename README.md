@@ -539,8 +539,14 @@ pytest
 
 ## Citation
 
-If you use FakeProt, please cite FakeProt itself and, where appropriate, the
-original sources of the models and concepts it implements.
+If you use this simulator in your research, please cite the original software and the associated publication (if any). The original module was developed by **Lucas Carrijo de Oliveira** (<lucas@ebi.ac.uk>). For now, you may reference the repository directly:
+
+```text
+Lucas C. de Oliveira. FakeProt. 2018–2026.
+https://github.com/lucas-ebi/fakeprot
+```
+
+A formal publication is in preparation; check the repository for updates.
 
 ### Substitution Model
 
